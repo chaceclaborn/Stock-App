@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chace's Stock Analyzer</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Arial", sans-serif;
+        background-color: #000;
+        color: #0f0;
+        line-height: 1.6;
+        overflow-x: hidden;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      header {
+        background: linear-gradient(135deg, #000 0%, #0a2e0a 100%);
+        padding: 20px 0;
+        margin-bottom: 30px;
+        border-bottom: 2px solid #0f0;
+        box-shadow: 0 2px 10px rgba(0, 255, 0, 0.3);
+      }
+
+      h1 {
+        text-align: center;
+        font-size: 3em;
+        text-shadow: 0 0 10px #0f0;
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0% {
+          text-shadow: 0 0 10px #0f0;
+        }
+        50% {
+          text-shadow: 0 0 20px #0f0, 0 0 30px #0f0;
+        }
+        100% {
+          text-shadow: 0 0 10px #0f0;
+        }
+      }
+
+      .search-container {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 30px;
+        gap: 10px;
+      }
+
+      .search-box {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+
+      input[type="text"] {
+        padding: 12px 20px;
+        background: #000;
+        border: 2px solid #0f0;
+        color: #0f0;
+        font-size: 16px;
+        border-radius: 5px;
+        width: 300px;
+        outline: none;
+        transition: all 0.3s;
+      }
+
+      input[type="text"]:focus {
+        box-shadow: 0 0 10px #0f0;
+      }
+
+      button {
+        padding: 12px 25px;
+        background: #0f0;
+        color: #000;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 16px;
+        transition: all 0.3s;
+      }
+
+      button:hover {
+        background: #0a0;
+        box-shadow: 0 0 15px #0f0;
+        transform: translateY(-2px);
+      }
+
+      .tabs {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 30px;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .tab {
+        padding: 10px 20px;
+        background: #0a2e0a;
+        border: 2px solid #0f0;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: all 0.3s;
+      }
+
+      .tab:hover,
+      .tab.active {
+        background: #0f0;
+        color: #000;
+        font-weight: bold;
+      }
+
+      .content-section {
+        display: none;
+      }
+
+      .content-section.active {
+        display: block;
+      }
+
+      .stock-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+      }
+
+      .stock-card {
+        background: #0a2e0a;
+        border: 2px solid #0f0;
+        border-radius: 10px;
+        padding: 20px;
+        transition: all 0.3s;
+        cursor: pointer;
+      }
+
+      .stock-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 20px rgba(0, 255, 0, 0.3);
+      }
+
+      .stock-symbol {
+        font-size: 24px;
+        font-weight: bold;
+        margin-bottom: 5px;
+      }
+
+      .stock-name {
+        font-size: 14px;
+        color: #aaa;
+        margin-bottom: 10px;
+      }
+
+      .stock-price {
+        font-size: 28px;
+        margin-bottom: 10px;
+      }
+
+      .stock-change {
+        font-size: 18px;
+      }
+
+      .positive {
+        color: #0f0;
+      }
+
+      .negative {
+        color: #f00;
+      }
+
+      .chart-container {
+        position: relative;
+        height: 400px;
+        margin: 30px 0;
+        background: #0a1a0a;
+        border: 2px solid #0f0;
+        border-radius: 10px;
+        padding: 20px;
+      }
+
+      .indicators-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin: 20px 0;
+      }
+
+      .indicator-card {
+        background: #0a2e0a;
+        border: 2px solid #0f0;
+        border-radius: 10px;
+        padding: 15px;
+        text-align: center;
+      }
+
+      .indicator-label {
+        font-size: 14px;
+        color: #aaa;
+        margin-bottom: 5px;
+      }
+
+      .indicator-value {
+        font-size: 24px;
+        font-weight: bold;
+      }
+
+      .analysis-section {
+        background: #0a1a0a;
+        border: 2px solid #0f0;
+        border-radius: 10px;
+        padding: 20px;
+        margin: 20px 0;
+      }
+
+      .analysis-header {
+        font-size: 20px;
+        margin-bottom: 15px;
+        color: #0f0;
+        text-shadow: 0 0 5px #0f0;
+      }
+
+      .sentiment-meter {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: #000;
+        border: 2px solid #0f0;
+        border-radius: 50px;
+        padding: 10px;
+        margin: 20px 0;
+        position: relative;
+        height: 50px;
+      }
+
+      .sentiment-indicator {
+        position: absolute;
+        width: 30px;
+        height: 30px;
+        background: #0f0;
+        border-radius: 50%;
+        top: 50%;
+        transform: translateY(-50%);
+        transition: left 0.5s ease;
+        box-shadow: 0 0 10px #0f0;
+      }
+
+      .sentiment-labels {
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+        padding: 0 20px;
+      }
+
+      .loading {
+        text-align: center;
+        font-size: 20px;
+        padding: 50px;
+      }
+
+      .error {
+        background: #300;
+        border: 2px solid #f00;
+        color: #f00;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        margin: 20px 0;
+      }
+
+      .news-section {
+        margin: 20px 0;
+      }
+
+      .news-item {
+        background: #0a2e0a;
+        border: 1px solid #0f0;
+        border-radius: 5px;
+        padding: 15px;
+        margin-bottom: 10px;
+        transition: all 0.3s;
+      }
+
+      .news-item:hover {
+        background: #0f3f0f;
+      }
+
+      .news-title {
+        font-size: 16px;
+        margin-bottom: 5px;
+        color: #0f0;
+      }
+
+      .news-meta {
+        font-size: 12px;
+        color: #aaa;
+      }
+
+      .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 1000;
+        overflow-y: auto;
+      }
+
+      .modal-content {
+        background: #000;
+        border: 2px solid #0f0;
+        border-radius: 10px;
+        padding: 30px;
+        margin: 50px auto;
+        max-width: 1200px;
+        position: relative;
+      }
+
+      .close-modal {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        font-size: 30px;
+        cursor: pointer;
+        color: #0f0;
+      }
+
+      .close-modal:hover {
+        color: #f00;
+      }
+
+      @media (max-width: 768px) {
+        .stock-grid {
+          grid-template-columns: 1fr;
+        }
+
+        h1 {
+          font-size: 2em;
+        }
+
+        .tabs {
+          flex-direction: column;
+          align-items: center;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="container">
+        <h1>📈 CHACE'S STOCK ANALYZER 📈</h1>
+      </div>
+    </header>
+
+    <div class="container">
+      <!-- Search Section -->
+      <div class="search-container">
+        <div class="search-box">
+          <input
+            type="text"
+            id="stockSearch"
+            placeholder="Search stocks (e.g., AAPL, Tesla)..."
+          />
+          <button onclick="searchStocks()">Search</button>
+          <button onclick="clearSearch()">Clear</button>
+        </div>
+      </div>
+
+      <!-- Category Tabs -->
+      <div class="tabs" id="categoryTabs">
+        <div class="tab active" onclick="switchTab('overview')">
+          Market Overview
+        </div>
+        <div class="tab" onclick="switchTab('all')">All Stocks</div>
+        <div class="tab" onclick="switchTab('predictions')">AI Predictions</div>
+        <div class="tab" onclick="switchTab('mega_tech')">Mega Tech</div>
+        <div class="tab" onclick="switchTab('meme_stocks')">Meme Stocks</div>
+        <div class="tab" onclick="switchTab('crypto_stocks')">
+          Crypto Stocks
+        </div>
+        <div class="tab" onclick="switchTab('ai_stocks')">AI Stocks</div>
+      </div>
+
+      <!-- Content Sections -->
+      <div id="overview" class="content-section active">
+        <div class="analysis-section">
+          <h2 class="analysis-header">Market Overview</h2>
+          <div id="marketIndices" class="indicators-grid">
+            <div class="loading">Loading market data...</div>
+          </div>
+
+          <h3 class="analysis-header">Market Sentiment</h3>
+          <div class="sentiment-meter">
+            <div
+              class="sentiment-indicator"
+              id="sentimentIndicator"
+              style="left: 50%"
+            ></div>
+            <div class="sentiment-labels">
+              <span>Extreme Fear</span>
+              <span>Fear</span>
+              <span>Neutral</span>
+              <span>Greed</span>
+              <span>Extreme Greed</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="all" class="content-section">
+        <div id="stocksGrid" class="stock-grid">
+          <div class="loading">Loading stocks...</div>
+        </div>
+      </div>
+
+      <div id="predictions" class="content-section">
+        <div class="analysis-section">
+          <h2 class="analysis-header">🤖 AI-Powered Trading Predictions</h2>
+          <p style="margin-bottom: 20px">
+            Advanced technical analysis with machine learning insights
+          </p>
+          <div id="predictionsGrid" class="stock-grid">
+            <div class="loading">Analyzing market patterns...</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="mega_tech" class="content-section">
+        <div id="megaTechGrid" class="stock-grid">
+          <div class="loading">Loading mega tech stocks...</div>
+        </div>
+      </div>
+
+      <div id="meme_stocks" class="content-section">
+        <div id="memeStocksGrid" class="stock-grid">
+          <div class="loading">Loading meme stocks...</div>
+        </div>
+      </div>
+
+      <div id="crypto_stocks" class="content-section">
+        <div id="cryptoStocksGrid" class="stock-grid">
+          <div class="loading">Loading crypto stocks...</div>
+        </div>
+      </div>
+
+      <div id="ai_stocks" class="content-section">
+        <div id="aiStocksGrid" class="stock-grid">
+          <div class="loading">Loading AI stocks...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stock Detail Modal -->
+    <div id="stockModal" class="modal">
+      <div class="modal-content">
+        <span class="close-modal" onclick="closeModal()">&times;</span>
+        <div id="modalContent">
+          <!-- Content will be dynamically inserted here -->
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Global variables
+      let currentTab = "overview";
+      let stocksData = {};
+      let chartInstance = null;
+      let updateInterval = null;
+
+      // Initialize
+      document.addEventListener("DOMContentLoaded", function () {
+        loadMarketOverview();
+        loadStocks("all");
+        loadPredictions();
+
+        // Set up auto-refresh
+        updateInterval = setInterval(() => {
+          if (currentTab === "overview") {
+            loadMarketOverview();
+          } else if (currentTab === "predictions") {
+            loadPredictions();
+          } else {
+            loadStocks(currentTab);
+          }
+        }, 30000); // Refresh every 30 seconds
+      });
+
+      // Tab switching
+      function switchTab(tab) {
+        // Update active tab
+        document
+          .querySelectorAll(".tab")
+          .forEach((t) => t.classList.remove("active"));
+        event.target.classList.add("active");
+
+        // Hide all content sections
+        document
+          .querySelectorAll(".content-section")
+          .forEach((s) => s.classList.remove("active"));
+
+        // Show selected section
+        document.getElementById(tab).classList.add("active");
+        currentTab = tab;
+
+        // Load appropriate data
+        if (tab === "overview") {
+          loadMarketOverview();
+        } else if (tab === "predictions") {
+          loadPredictions();
+        } else {
+          loadStocks(tab);
+        }
+      }
+
+      // Load market overview
+      async function loadMarketOverview() {
+        try {
+          const response = await axios.get("/api/market-overview");
+          const data = response.data;
+
+          if (data.status === "ok") {
+            displayMarketIndices(data.indices);
+            updateSentimentMeter(data.indices.fear_greed_index);
+          }
+        } catch (error) {
+          console.error("Error loading market overview:", error);
+          document.getElementById("marketIndices").innerHTML =
+            '<div class="error">Failed to load market data</div>';
+        }
+      }
+
+      // Display market indices
+      function displayMarketIndices(indices) {
+        let html = "";
+
+        for (const [name, data] of Object.entries(indices)) {
+          if (name === "fear_greed_index") continue;
+
+          const changeClass = data.change >= 0 ? "positive" : "negative";
+          const arrow = data.change >= 0 ? "▲" : "▼";
+
+          html += `
+                    <div class="indicator-card">
+                        <div class="indicator-label">${name}</div>
+                        <div class="indicator-value">${data.value.toFixed(
+                          2
+                        )}</div>
+                        <div class="${changeClass}">
+                            ${arrow} ${Math.abs(data.change).toFixed(
+            2
+          )} (${data.change_percent.toFixed(2)}%)
+                        </div>
+                    </div>
+                `;
+        }
+
+        document.getElementById("marketIndices").innerHTML = html;
+      }
+
+      // Update sentiment meter
+      function updateSentimentMeter(fearGreedIndex) {
+        const indicator = document.getElementById("sentimentIndicator");
+        const position = (fearGreedIndex / 100) * 80 + 10; // Convert to percentage position
+        indicator.style.left = `${position}%`;
+
+        // Update color based on sentiment
+        if (fearGreedIndex < 20) {
+          indicator.style.background = "#f00";
+          indicator.style.boxShadow = "0 0 10px #f00";
+        } else if (fearGreedIndex < 40) {
+          indicator.style.background = "#ff0";
+          indicator.style.boxShadow = "0 0 10px #ff0";
+        } else if (fearGreedIndex < 60) {
+          indicator.style.background = "#fff";
+          indicator.style.boxShadow = "0 0 10px #fff";
+        } else if (fearGreedIndex < 80) {
+          indicator.style.background = "#0f0";
+          indicator.style.boxShadow = "0 0 10px #0f0";
+        } else {
+          indicator.style.background = "#0f0";
+          indicator.style.boxShadow = "0 0 20px #0f0";
+        }
+      }
+
+      // Load stocks
+      async function loadStocks(category) {
+        try {
+          const response = await axios.get(`/api/stocks?category=${category}`);
+          const data = response.data;
+
+          if (data.status === "ok" || data.status === "cached") {
+            stocksData[category] = data.stocks;
+            displayStocks(data.stocks, category);
+          }
+        } catch (error) {
+          console.error("Error loading stocks:", error);
+          const gridId = category === "all" ? "stocksGrid" : `${category}Grid`;
+          document.getElementById(gridId).innerHTML =
+            '<div class="error">Failed to load stock data</div>';
+        }
+      }
+
+      // Display stocks
+      function displayStocks(stocks, category) {
+        const gridId =
+          category === "all"
+            ? "stocksGrid"
+            : category.replace(/_/g, "") + "Grid";
+        const grid = document.getElementById(gridId);
+
+        if (!grid) return;
+
+        let html = "";
+
+        stocks.forEach((stock) => {
+          const changeClass = stock.change >= 0 ? "positive" : "negative";
+          const arrow = stock.change >= 0 ? "▲" : "▼";
+
+          html += `
+                    <div class="stock-card" onclick="showStockDetail('${
+                      stock.symbol
+                    }')">
+                        <div class="stock-symbol">${stock.symbol}</div>
+                        <div class="stock-name">${
+                          stock.name || stock.symbol
+                        }</div>
+                        <div class="stock-price">$${stock.price.toFixed(
+                          2
+                        )}</div>
+                        <div class="stock-change ${changeClass}">
+                            ${arrow} ${Math.abs(stock.change).toFixed(2)} (${
+            stock.change_percent
+          })
+                        </div>
+                        <div style="margin-top: 10px; font-size: 12px; color: #aaa;">
+                            Volume: ${(stock.volume / 1000000).toFixed(2)}M
+                        </div>
+                    </div>
+                `;
+        });
+
+        grid.innerHTML = html;
+      }
+
+      // Load predictions
+      async function loadPredictions() {
+        try {
+          const response = await axios.get("/api/predictions");
+          const data = response.data;
+
+          if (data.status === "success" && data.opportunities.length > 0) {
+            displayPredictions(data.opportunities);
+          } else {
+            document.getElementById("predictionsGrid").innerHTML =
+              '<div class="analysis-section">No strong trading signals detected at this time. The AI is continuously analyzing market patterns.</div>';
+          }
+        } catch (error) {
+          console.error("Error loading predictions:", error);
+          document.getElementById("predictionsGrid").innerHTML =
+            '<div class="error">Failed to load AI predictions</div>';
+        }
+      }
+
+      // Display predictions
+      function displayPredictions(opportunities) {
+        let html = "";
+
+        opportunities.forEach((opp) => {
+          const scoreColor =
+            opp.score >= 7 ? "#0f0" : opp.score >= 5 ? "#ff0" : "#f90";
+
+          html += `
+                    <div class="stock-card" onclick="showStockDetail('${
+                      opp.ticker
+                    }')">
+                        <div class="stock-symbol">${opp.ticker}</div>
+                        <div class="stock-name">${opp.name || opp.ticker}</div>
+                        <div class="stock-price">$${opp.price.toFixed(2)}</div>
+                        <div style="margin: 10px 0; padding: 10px; background: rgba(0,255,0,0.1); border-radius: 5px;">
+                            <div style="color: ${scoreColor}; font-weight: bold; margin-bottom: 5px;">
+                                Score: ${opp.score}/10
+                            </div>
+                            <div style="font-size: 12px; color: #aaa;">
+                                ${opp.reasons[0]}
+                            </div>
+                        </div>
+                        <div style="font-size: 12px; color: #0f0;">
+                            ${opp.strategy.recommendation}
+                        </div>
+                    </div>
+                `;
+        });
+
+        document.getElementById("predictionsGrid").innerHTML = html;
+      }
+
+      // Show stock detail
+      async function showStockDetail(symbol) {
+        document.getElementById("stockModal").style.display = "block";
+        document.getElementById("modalContent").innerHTML =
+          '<div class="loading">Loading stock details...</div>';
+
+        try {
+          const [detailResponse, analysisResponse] = await Promise.all([
+            axios.get(`/api/stock/${symbol}`),
+            axios.get(`/api/stock/${symbol}/analysis`),
+          ]);
+
+          const stockData = detailResponse.data;
+          const analysisData = analysisResponse.data;
+
+          displayStockModal(stockData, analysisData);
+        } catch (error) {
+          console.error("Error loading stock detail:", error);
+          document.getElementById("modalContent").innerHTML =
+            '<div class="error">Failed to load stock details</div>';
+        }
+      }
+
+      // Display stock modal
+      function displayStockModal(stockData, analysisData) {
+        const changeClass =
+          stockData.quote.change >= 0 ? "positive" : "negative";
+        const arrow = stockData.quote.change >= 0 ? "▲" : "▼";
+
+        let html = `
+                <h2>${stockData.symbol} - ${stockData.name}</h2>
+                
+                <div class="indicators-grid">
+                    <div class="indicator-card">
+                        <div class="indicator-label">Current Price</div>
+                        <div class="indicator-value">$${stockData.quote.price.toFixed(
+                          2
+                        )}</div>
+                        <div class="${changeClass}">
+                            ${arrow} ${Math.abs(stockData.quote.change).toFixed(
+          2
+        )} (${stockData.quote.change_percent})
+                        </div>
+                    </div>
+                    <div class="indicator-card">
+                        <div class="indicator-label">Volume</div>
+                        <div class="indicator-value">${(
+                          stockData.quote.volume / 1000000
+                        ).toFixed(2)}M</div>
+                    </div>
+                    <div class="indicator-card">
+                        <div class="indicator-label">RSI</div>
+                        <div class="indicator-value">${
+                          analysisData.current_indicators.rsi?.toFixed(2) ||
+                          "N/A"
+                        }</div>
+                    </div>
+                    <div class="indicator-card">
+                        <div class="indicator-label">AI Score</div>
+                        <div class="indicator-value" style="color: ${
+                          analysisData.score >= 7
+                            ? "#0f0"
+                            : analysisData.score >= 5
+                            ? "#ff0"
+                            : "#f90"
+                        }">
+                            ${analysisData.score}/10
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Chart Container -->
+                <div class="chart-container">
+                    <canvas id="stockChart"></canvas>
+                </div>
+                
+                <!-- AI Analysis -->
+                <div class="analysis-section">
+                    <h3 class="analysis-header">AI Analysis</h3>
+                    <div style="margin-bottom: 15px;">
+                        <strong>Signals Detected:</strong>
+                        <ul style="margin-left: 20px; margin-top: 10px;">
+                            ${analysisData.reasons
+                              .map((r) => `<li>${r}</li>`)
+                              .join("")}
+                        </ul>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <strong>Entry/Exit Suggestions:</strong>
+                        <div style="margin-top: 10px;">
+                            Support Entry: $${
+                              analysisData.suggestions?.support_entry?.toFixed(
+                                2
+                              ) || "N/A"
+                            }<br>
+                            Resistance Exit: $${
+                              analysisData.suggestions?.resistance_exit?.toFixed(
+                                2
+                              ) || "N/A"
+                            }<br>
+                            Stop Loss: $${
+                              analysisData.suggestions?.stop_loss?.toFixed(2) ||
+                              "N/A"
+                            }
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Fundamentals -->
+                ${
+                  stockData.fundamentals
+                    ? `
+                <div class="analysis-section">
+                    <h3 class="analysis-header">Fundamentals</h3>
+                    <div class="indicators-grid">
+                        <div class="indicator-card">
+                            <div class="indicator-label">Market Cap</div>
+                            <div class="indicator-value">$${(
+                              stockData.fundamentals.market_cap / 1000000000
+                            ).toFixed(2)}B</div>
+                        </div>
+                        <div class="indicator-card">
+                            <div class="indicator-label">P/E Ratio</div>
+                            <div class="indicator-value">${
+                              stockData.fundamentals.pe_ratio?.toFixed(2) ||
+                              "N/A"
+                            }</div>
+                        </div>
+                        <div class="indicator-card">
+                            <div class="indicator-label">52W High</div>
+                            <div class="indicator-value">$${
+                              stockData.fundamentals["52_week_high"]?.toFixed(
+                                2
+                              ) || "N/A"
+                            }</div>
+                        </div>
+                        <div class="indicator-card">
+                            <div class="indicator-label">52W Low</div>
+                            <div class="indicator-value">$${
+                              stockData.fundamentals["52_week_low"]?.toFixed(
+                                2
+                              ) || "N/A"
+                            }</div>
+                        </div>
+                    </div>
+                </div>
+                `
+                    : ""
+                }
+                
+                <!-- News Section -->
+                ${
+                  stockData.news && stockData.news.length > 0
+                    ? `
+                <div class="analysis-section">
+                    <h3 class="analysis-header">Latest News</h3>
+                    <div class="news-section">
+                        ${stockData.news
+                          .slice(0, 3)
+                          .map(
+                            (news) => `
+                            <div class="news-item">
+                                <div class="news-title">${news.title}</div>
+                                <div class="news-meta">${
+                                  news.publisher
+                                } - ${new Date(
+                              news.timestamp * 1000
+                            ).toLocaleDateString()}</div>
+                            </div>
+                        `
+                          )
+                          .join("")}
+                    </div>
+                </div>
+                `
+                    : ""
+                }
+            `;
+
+        document.getElementById("modalContent").innerHTML = html;
+
+        // Draw the chart
+        drawStockChart(stockData.daily_data, analysisData.chart_data);
+      }
+
+      // Draw stock chart
+      function drawStockChart(priceData, analysisData) {
+        const ctx = document.getElementById("stockChart").getContext("2d");
+
+        // Destroy existing chart if it exists
+        if (chartInstance) {
+          chartInstance.destroy();
+        }
+
+        // Prepare data
+        const labels = priceData.map((d) => d.date);
+        const prices = priceData.map((d) => d.close);
+        const volumes = priceData.map((d) => d.volume);
+
+        // Create chart
+        chartInstance = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: "Price",
+                data: prices,
+                borderColor: "#0f0",
+                backgroundColor: "rgba(0, 255, 0, 0.1)",
+                borderWidth: 2,
+                tension: 0.4,
+                yAxisID: "y-price",
+              },
+              {
+                label: "Volume",
+                data: volumes,
+                type: "bar",
+                backgroundColor: "rgba(0, 255, 0, 0.3)",
+                yAxisID: "y-volume",
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+              mode: "index",
+              intersect: false,
+            },
+            plugins: {
+              legend: {
+                display: true,
+                labels: {
+                  color: "#0f0",
+                },
+              },
+            },
+            scales: {
+              x: {
+                display: true,
+                grid: {
+                  color: "rgba(0, 255, 0, 0.1)",
+                },
+                ticks: {
+                  color: "#0f0",
+                  maxRotation: 45,
+                  minRotation: 45,
+                },
+              },
+              "y-price": {
+                type: "linear",
+                display: true,
+                position: "left",
+                grid: {
+                  color: "rgba(0, 255, 0, 0.1)",
+                },
+                ticks: {
+                  color: "#0f0",
+                },
+              },
+              "y-volume": {
+                type: "linear",
+                display: true,
+                position: "right",
+                grid: {
+                  drawOnChartArea: false,
+                },
+                ticks: {
+                  color: "#0f0",
+                },
+              },
+            },
+          },
+        });
+      }
+
+      // Search stocks
+      async function searchStocks() {
+        const query = document.getElementById("stockSearch").value.trim();
+        if (!query) return;
+
+        try {
+          const response = await axios.get(
+            `/api/search?q=${encodeURIComponent(query)}`
+          );
+          const results = response.data.results;
+
+          if (results.length > 0) {
+            displayStocks(results, "all");
+            switchTab("all");
+          } else {
+            alert("No stocks found matching your search");
+          }
+        } catch (error) {
+          console.error("Error searching stocks:", error);
+          alert("Error searching stocks");
+        }
+      }
+
+      // Clear search
+      function clearSearch() {
+        document.getElementById("stockSearch").value = "";
+        loadStocks("all");
+      }
+
+      // Close modal
+      function closeModal() {
+        document.getElementById("stockModal").style.display = "none";
+        if (chartInstance) {
+          chartInstance.destroy();
+          chartInstance = null;
+        }
+      }
+
+      // Handle enter key in search
+      document
+        .getElementById("stockSearch")
+        .addEventListener("keypress", function (e) {
+          if (e.key === "Enter") {
+            searchStocks();
+          }
+        });
+
+      // Close modal when clicking outside
+      window.onclick = function (event) {
+        const modal = document.getElementById("stockModal");
+        if (event.target === modal) {
+          closeModal();
+        }
+      };
+    </script>
+  </body>
+</html>

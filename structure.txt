@@ -1,0 +1,18 @@
+G:\Coding\Stocks\
+├── src/
+│   ├── data/
+│   │   ├── __init__.py
+│   │   └── fetcher.py
+│   ├── analysis/
+│   │   ├── __init__.py
+│   │   └── indicators.py
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── predictor.py
+│   ├── web/
+│   │   ├── __init__.py
+│   │   ├── app.py
+│   │   └── templates/
+│   │       └── index.html
+│   └── __init__.py
+└── run_webapp.py

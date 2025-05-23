@@ -1,0 +1,94 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+VENV/
+.venv
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+stock_data.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# API Keys and Secrets
+config.ini
+secrets.json
+api_keys.py
+
+# Cache
+.cache/
+*.cache
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# System files
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# pytest
+.pytest_cache/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Flask
+instance/
+.webassets-cache
+
+# Data files (if you don't want to track large data files)
+# data/
+# *.csv
+# *.xlsx
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Package files
+*.zip
+*.tar.gz
+*.rar
+
+# If you have any API response cache
+api_cache/
+response_cache/
