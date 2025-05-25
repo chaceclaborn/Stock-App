@@ -1,0 +1,80 @@
+<!-- Stock Grid Sections -->
+<div id="all" class="content-section">
+  <div class="section-header">
+    <h2 class="analysis-header">All Stocks</h2>
+    <div class="last-updated" id="allLastUpdated">Loading...</div>
+  </div>
+  <div id="allGrid" class="stock-grid">
+    <div class="loading">Loading stocks from database...</div>
+  </div>
+</div>
+
+<div id="portfolio" class="content-section">
+  <div class="section-header">
+    <h2 class="analysis-header">My Portfolio</h2>
+    <div class="last-updated" id="portfolioLastUpdated">Loading...</div>
+  </div>
+
+  <!-- Portfolio Summary -->
+  <div class="portfolio-summary">
+    <div class="indicator-card">
+      <div class="indicator-label">Total Value</div>
+      <div class="indicator-value" id="portfolioTotalValue">$0.00</div>
+    </div>
+    <div class="indicator-card">
+      <div class="indicator-label">Day Change</div>
+      <div class="indicator-value" id="portfolioDayChange">$0.00</div>
+    </div>
+    <div class="indicator-card">
+      <div class="indicator-label">Total Return</div>
+      <div class="indicator-value" id="portfolioTotalReturn">0.00%</div>
+    </div>
+  </div>
+
+  <!-- Add Stock to Portfolio -->
+  <div class="portfolio-controls">
+    <input
+      type="text"
+      id="portfolioAddSymbol"
+      placeholder="Symbol (e.g., AAPL)"
+      style="width: 150px"
+    />
+    <input
+      type="number"
+      id="portfolioAddShares"
+      placeholder="Shares"
+      min="1"
+      style="width: 100px"
+    />
+    <input
+      type="number"
+      id="portfolioAddPrice"
+      placeholder="Buy Price"
+      step="0.01"
+      min="0.01"
+      style="width: 120px"
+    />
+    <button onclick="addToPortfolio()">Add to Portfolio</button>
+  </div>
+
+  <div id="portfolioGrid" class="stock-grid">
+    <div class="no-portfolio">
+      No stocks in portfolio. Add some to get started!
+    </div>
+  </div>
+</div>
+
+<div id="predictions" class="content-section">
+  <div class="analysis-section">
+    <div class="section-header">
+      <h2 class="analysis-header">🤖 AI-Powered Trading Predictions</h2>
+      <div class="last-updated" id="predictionsLastUpdated">Loading...</div>
+    </div>
+    <p style="margin-bottom: 20px">
+      Advanced technical analysis with machine learning insights
+    </p>
+    <div id="predictionsGrid" class="stock-grid">
+      <div class="loading">Analyzing market patterns...</div>
+    </div>
+  </div>
+</div>

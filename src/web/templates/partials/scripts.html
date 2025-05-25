@@ -1,0 +1,796 @@
+<script>
+  // Global variables
+  let currentTab = "overview";
+  let stocksData = {};
+  let chartInstance = null;
+  let updateInterval = null;
+  let portfolio = JSON.parse(localStorage.getItem("stockPortfolio")) || {};
+  let cachedStocks = {};
+
+  // Initialize
+  document.addEventListener("DOMContentLoaded", function () {
+    // Load cached data immediately
+    loadCachedStocks();
+
+    // Then load fresh data
+    loadMarketOverview();
+    loadStocks("all");
+    loadPredictions();
+    loadPortfolio();
+
+    // Set up auto-refresh
+    updateInterval = setInterval(() => {
+      if (currentTab === "overview") {
+        loadMarketOverview();
+      } else if (currentTab === "predictions") {
+        loadPredictions();
+      } else if (currentTab === "portfolio") {
+        updatePortfolioValues();
+      } else {
+        loadStocks(currentTab);
+      }
+    }, 30000); // Refresh every 30 seconds
+  });
+
+  // Tab switching
+  function switchTab(tab) {
+    // Update active tab
+    document
+      .querySelectorAll(".tab")
+      .forEach((t) => t.classList.remove("active"));
+    event.target.classList.add("active");
+
+    // Hide all content sections
+    document
+      .querySelectorAll(".content-section")
+      .forEach((s) => s.classList.remove("active"));
+
+    // Show selected section
+    document.getElementById(tab).classList.add("active");
+    currentTab = tab;
+
+    // Load appropriate data
+    if (tab === "overview") {
+      loadMarketOverview();
+    } else if (tab === "predictions") {
+      loadPredictions();
+    } else if (tab === "portfolio") {
+      loadPortfolio();
+    } else {
+      loadStocks(tab);
+    }
+  }
+
+  // Format time ago
+  function formatTimeAgo(timestamp) {
+    const now = new Date();
+    const then = new Date(timestamp);
+    const seconds = Math.floor((now - then) / 1000);
+
+    if (seconds < 60) return `${seconds} seconds ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} minute${minutes > 1 ? "s" : ""} ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hour${hours > 1 ? "s" : ""} ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} day${days > 1 ? "s" : ""} ago`;
+  }
+
+  // Update last updated display
+  function updateLastUpdated(tabId, timestamp, isCache = false) {
+    const element = document.getElementById(`${tabId}LastUpdated`);
+    if (element) {
+      const timeAgo = formatTimeAgo(timestamp);
+      const cacheIndicator = isCache
+        ? '<span class="data-status">Cached</span>'
+        : "";
+      element.innerHTML = `Last updated: ${timeAgo} ${cacheIndicator}`;
+    }
+  }
+
+  // Load cached stocks immediately
+  async function loadCachedStocks() {
+    try {
+      const response = await axios.get("/api/stocks/cached");
+      const data = response.data;
+
+      if (data.stocks && data.stocks.length > 0) {
+        cachedStocks = {};
+        data.stocks.forEach((stock) => {
+          cachedStocks[stock.symbol] = stock;
+        });
+
+        // Display cached data immediately if on all stocks tab
+        if (currentTab === "all") {
+          displayStocks(data.stocks, "all");
+          updateLastUpdated("all", data.last_updated, true);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading cached stocks:", error);
+    }
+  }
+
+  // Load market overview
+  async function loadMarketOverview() {
+    try {
+      const response = await axios.get("/api/market-overview");
+      const data = response.data;
+
+      if (data.status === "ok") {
+        displayMarketIndices(data.indices);
+        updateSentimentMeter(data.indices.fear_greed_index);
+        updateLastUpdated(
+          "overview",
+          data.timestamp || new Date().toISOString()
+        );
+      }
+    } catch (error) {
+      console.error("Error loading market overview:", error);
+      document.getElementById("marketIndices").innerHTML =
+        '<div class="error">Failed to load market data</div>';
+    }
+  }
+
+  // Display market indices
+  function displayMarketIndices(indices) {
+    let html = "";
+
+    for (const [name, data] of Object.entries(indices)) {
+      if (name === "fear_greed_index") continue;
+
+      const changeClass = data.change >= 0 ? "positive" : "negative";
+      const arrow = data.change >= 0 ? "▲" : "▼";
+
+      html += `
+              <div class="indicator-card">
+                  <div class="indicator-label">${name}</div>
+                  <div class="indicator-value">${data.value.toFixed(2)}</div>
+                  <div class="${changeClass}">
+                      ${arrow} ${Math.abs(data.change).toFixed(
+        2
+      )} (${data.change_percent.toFixed(2)}%)
+                  </div>
+              </div>
+          `;
+    }
+
+    document.getElementById("marketIndices").innerHTML = html;
+  }
+
+  // Update sentiment meter
+  function updateSentimentMeter(fearGreedIndex) {
+    const indicator = document.getElementById("sentimentIndicator");
+    const position = (fearGreedIndex / 100) * 80 + 10;
+    indicator.style.left = `${position}%`;
+
+    if (fearGreedIndex < 20) {
+      indicator.style.background = "#f00";
+      indicator.style.boxShadow = "0 0 10px #f00";
+    } else if (fearGreedIndex < 40) {
+      indicator.style.background = "#ff0";
+      indicator.style.boxShadow = "0 0 10px #ff0";
+    } else if (fearGreedIndex < 60) {
+      indicator.style.background = "#fff";
+      indicator.style.boxShadow = "0 0 10px #fff";
+    } else if (fearGreedIndex < 80) {
+      indicator.style.background = "#0f0";
+      indicator.style.boxShadow = "0 0 10px #0f0";
+    } else {
+      indicator.style.background = "#0f0";
+      indicator.style.boxShadow = "0 0 20px #0f0";
+    }
+  }
+
+  // Load stocks
+  async function loadStocks(category) {
+    try {
+      // Show cached data immediately
+      if (Object.keys(cachedStocks).length > 0) {
+        const cachedArray = Object.values(cachedStocks);
+        displayStocks(cachedArray, "all");
+        updateLastUpdated("all", new Date().toISOString(), true);
+      }
+
+      // Then fetch fresh data
+      const response = await axios.get(`/api/stocks?category=${category}`);
+      const data = response.data;
+
+      if (data.stocks && data.stocks.length > 0) {
+        stocksData[category] = data.stocks;
+        displayStocks(data.stocks, category);
+
+        const isCache =
+          data.from_cache ||
+          data.status === "cached" ||
+          data.status === "cached_error";
+        updateLastUpdated(category, data.last_updated, isCache);
+
+        // Update cache
+        data.stocks.forEach((stock) => {
+          cachedStocks[stock.symbol] = stock;
+        });
+      }
+    } catch (error) {
+      console.error("Error loading stocks:", error);
+
+      // Display cached data on error
+      if (Object.keys(cachedStocks).length > 0) {
+        const cachedArray = Object.values(cachedStocks);
+        displayStocks(cachedArray, "all");
+        updateLastUpdated("all", new Date().toISOString(), true);
+      } else {
+        document.getElementById("allGrid").innerHTML =
+          '<div class="error">Failed to load stock data. Please check your connection.</div>';
+      }
+    }
+  }
+
+  // Display stocks
+  function displayStocks(stocks, category) {
+    const gridId = category === "all" ? "allGrid" : `${category}Grid`;
+    const grid = document.getElementById(gridId);
+
+    if (!grid) {
+      console.error(`Grid element not found: ${gridId}`);
+      return;
+    }
+
+    if (!stocks || stocks.length === 0) {
+      grid.innerHTML = '<div class="error">No stocks to display</div>';
+      return;
+    }
+
+    let html = "";
+
+    stocks.forEach((stock) => {
+      const changeClass = stock.change >= 0 ? "positive" : "negative";
+      const arrow = stock.change >= 0 ? "▲" : "▼";
+
+      html += `
+              <div class="stock-card" onclick="showStockDetail('${
+                stock.symbol
+              }')">
+                  <div class="stock-symbol">${stock.symbol}</div>
+                  <div class="stock-name">${stock.name || stock.symbol}</div>
+                  <div class="stock-price">$${stock.price.toFixed(2)}</div>
+                  <div class="stock-change ${changeClass}">
+                      ${arrow} ${Math.abs(stock.change).toFixed(2)} (${
+        stock.change_percent
+      })
+                  </div>
+                  <div style="margin-top: 10px; font-size: 12px; color: #aaa;">
+                      Volume: ${(stock.volume / 1000000).toFixed(2)}M
+                  </div>
+              </div>
+          `;
+    });
+
+    grid.innerHTML = html;
+  }
+
+  // Portfolio functions
+  function loadPortfolio() {
+    const portfolioGrid = document.getElementById("portfolioGrid");
+
+    if (Object.keys(portfolio).length === 0) {
+      portfolioGrid.innerHTML =
+        '<div class="no-portfolio">No stocks in portfolio. Add some to get started!</div>';
+      updatePortfolioSummary(0, 0, 0);
+      return;
+    }
+
+    updatePortfolioValues();
+  }
+
+  async function updatePortfolioValues() {
+    const portfolioGrid = document.getElementById("portfolioGrid");
+    let html = "";
+    let totalValue = 0;
+    let totalCost = 0;
+    let dayChange = 0;
+
+    for (const [symbol, holding] of Object.entries(portfolio)) {
+      // Get current price from cache or API
+      let currentPrice = 0;
+      let change = 0;
+      let changePercent = "0.00%";
+
+      if (cachedStocks[symbol]) {
+        currentPrice = cachedStocks[symbol].price;
+        change = cachedStocks[symbol].change;
+        changePercent = cachedStocks[symbol].change_percent;
+      }
+
+      const currentValue = currentPrice * holding.shares;
+      const costBasis = holding.avgPrice * holding.shares;
+      const gain = currentValue - costBasis;
+      const gainPercent = costBasis > 0 ? (gain / costBasis) * 100 : 0;
+
+      totalValue += currentValue;
+      totalCost += costBasis;
+      dayChange += change * holding.shares;
+
+      const gainClass = gain >= 0 ? "positive" : "negative";
+
+      html += `
+        <div class="portfolio-stock-card">
+          <button class="remove-from-portfolio" onclick="removeFromPortfolio('${symbol}')">×</button>
+          <div class="stock-symbol">${symbol}</div>
+          <div class="stock-name">${
+            holding.shares
+          } shares @ $${holding.avgPrice.toFixed(2)}</div>
+          <div class="stock-price">$${currentPrice.toFixed(2)}</div>
+          <div class="stock-change ${gainClass}">
+            P/L: $${gain.toFixed(2)} (${gainPercent.toFixed(2)}%)
+          </div>
+          <div style="margin-top: 10px; font-size: 14px;">
+            Value: $${currentValue.toFixed(2)}
+          </div>
+        </div>
+      `;
+    }
+
+    portfolioGrid.innerHTML = html;
+
+    const totalReturn =
+      totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0;
+    updatePortfolioSummary(totalValue, dayChange, totalReturn);
+    updateLastUpdated("portfolio", new Date().toISOString());
+  }
+
+  function updatePortfolioSummary(totalValue, dayChange, totalReturn) {
+    document.getElementById(
+      "portfolioTotalValue"
+    ).textContent = `$${totalValue.toFixed(2)}`;
+    document.getElementById(
+      "portfolioDayChange"
+    ).textContent = `$${dayChange.toFixed(2)}`;
+    document.getElementById("portfolioDayChange").className =
+      dayChange >= 0 ? "indicator-value positive" : "indicator-value negative";
+    document.getElementById(
+      "portfolioTotalReturn"
+    ).textContent = `${totalReturn.toFixed(2)}%`;
+    document.getElementById("portfolioTotalReturn").className =
+      totalReturn >= 0
+        ? "indicator-value positive"
+        : "indicator-value negative";
+  }
+
+  function addToPortfolio() {
+    const symbol = document
+      .getElementById("portfolioAddSymbol")
+      .value.toUpperCase();
+    const shares = parseInt(
+      document.getElementById("portfolioAddShares").value
+    );
+    const price = parseFloat(
+      document.getElementById("portfolioAddPrice").value
+    );
+
+    if (!symbol || !shares || !price || shares <= 0 || price <= 0) {
+      alert("Please enter valid symbol, shares, and price");
+      return;
+    }
+
+    if (portfolio[symbol]) {
+      // Update existing holding
+      const totalShares = portfolio[symbol].shares + shares;
+      const totalCost =
+        portfolio[symbol].shares * portfolio[symbol].avgPrice + shares * price;
+      portfolio[symbol] = {
+        shares: totalShares,
+        avgPrice: totalCost / totalShares,
+      };
+    } else {
+      // Add new holding
+      portfolio[symbol] = {
+        shares: shares,
+        avgPrice: price,
+      };
+    }
+
+    // Save to localStorage
+    localStorage.setItem("stockPortfolio", JSON.stringify(portfolio));
+
+    // Clear inputs
+    document.getElementById("portfolioAddSymbol").value = "";
+    document.getElementById("portfolioAddShares").value = "";
+    document.getElementById("portfolioAddPrice").value = "";
+
+    // Reload portfolio
+    loadPortfolio();
+  }
+
+  function removeFromPortfolio(symbol) {
+    if (confirm(`Remove ${symbol} from portfolio?`)) {
+      delete portfolio[symbol];
+      localStorage.setItem("stockPortfolio", JSON.stringify(portfolio));
+      loadPortfolio();
+    }
+  }
+
+  // Load predictions
+  async function loadPredictions() {
+    try {
+      const response = await axios.get("/api/predictions");
+      const data = response.data;
+
+      if (data.status === "success" && data.opportunities.length > 0) {
+        displayPredictions(data.opportunities);
+        updateLastUpdated("predictions", data.generated_at);
+      } else {
+        document.getElementById("predictionsGrid").innerHTML =
+          '<div class="analysis-section">No strong trading signals detected at this time. The AI is continuously analyzing market patterns.</div>';
+        updateLastUpdated("predictions", new Date().toISOString());
+      }
+    } catch (error) {
+      console.error("Error loading predictions:", error);
+      document.getElementById("predictionsGrid").innerHTML =
+        '<div class="error">Failed to load AI predictions</div>';
+    }
+  }
+
+  // Display predictions
+  function displayPredictions(opportunities) {
+    let html = "";
+
+    opportunities.forEach((opp) => {
+      const scoreColor =
+        opp.score >= 7 ? "#0f0" : opp.score >= 5 ? "#ff0" : "#f90";
+
+      html += `
+              <div class="stock-card" onclick="showStockDetail('${
+                opp.ticker
+              }')">
+                  <div class="stock-symbol">${opp.ticker}</div>
+                  <div class="stock-name">${opp.name || opp.ticker}</div>
+                  <div class="stock-price">$${opp.price.toFixed(2)}</div>
+                  <div style="margin: 10px 0; padding: 10px; background: rgba(0,255,0,0.1); border-radius: 5px;">
+                      <div style="color: ${scoreColor}; font-weight: bold; margin-bottom: 5px;">
+                          Score: ${opp.score}/10
+                      </div>
+                      <div style="font-size: 12px; color: #aaa;">
+                          ${opp.reasons[0]}
+                      </div>
+                  </div>
+                  <div style="font-size: 12px; color: #0f0;">
+                      ${opp.strategy.recommendation}
+                  </div>
+              </div>
+          `;
+    });
+
+    document.getElementById("predictionsGrid").innerHTML = html;
+  }
+
+  // Show stock detail
+  async function showStockDetail(symbol) {
+    document.getElementById("stockModal").style.display = "block";
+    document.getElementById("modalContent").innerHTML =
+      '<div class="loading">Loading stock details...</div>';
+
+    try {
+      const [detailResponse, analysisResponse] = await Promise.all([
+        axios.get(`/api/stock/${symbol}`),
+        axios.get(`/api/stock/${symbol}/analysis`),
+      ]);
+
+      const stockData = detailResponse.data;
+      const analysisData = analysisResponse.data;
+
+      displayStockModal(stockData, analysisData);
+    } catch (error) {
+      console.error("Error loading stock detail:", error);
+      document.getElementById("modalContent").innerHTML =
+        '<div class="error">Failed to load stock details</div>';
+    }
+  }
+
+  // Display stock modal
+  function displayStockModal(stockData, analysisData) {
+    const changeClass = stockData.quote.change >= 0 ? "positive" : "negative";
+    const arrow = stockData.quote.change >= 0 ? "▲" : "▼";
+
+    // Check if in portfolio
+    const inPortfolio = portfolio[stockData.symbol] !== undefined;
+    const portfolioButton = inPortfolio
+      ? `<button onclick="removeFromPortfolio('${stockData.symbol}'); closeModal();" style="background: #f00;">Remove from Portfolio</button>`
+      : `<button onclick="document.getElementById('portfolioAddSymbol').value='${stockData.symbol}'; document.getElementById('portfolioAddPrice').value='${stockData.quote.price}'; closeModal(); switchTab('portfolio');">Add to Portfolio</button>`;
+
+    let html = `
+          <h2>${stockData.symbol} - ${stockData.name}</h2>
+          <div style="margin-bottom: 20px;">${portfolioButton}</div>
+          
+          <div class="indicators-grid">
+              <div class="indicator-card">
+                  <div class="indicator-label">Current Price</div>
+                  <div class="indicator-value">$${stockData.quote.price.toFixed(
+                    2
+                  )}</div>
+                  <div class="${changeClass}">
+                      ${arrow} ${Math.abs(stockData.quote.change).toFixed(
+      2
+    )} (${stockData.quote.change_percent})
+                  </div>
+              </div>
+              <div class="indicator-card">
+                  <div class="indicator-label">Volume</div>
+                  <div class="indicator-value">${(
+                    stockData.quote.volume / 1000000
+                  ).toFixed(2)}M</div>
+              </div>
+              <div class="indicator-card">
+                  <div class="indicator-label">RSI</div>
+                  <div class="indicator-value">${
+                    analysisData.current_indicators.rsi?.toFixed(2) || "N/A"
+                  }</div>
+              </div>
+              <div class="indicator-card">
+                  <div class="indicator-label">AI Score</div>
+                  <div class="indicator-value" style="color: ${
+                    analysisData.score >= 7
+                      ? "#0f0"
+                      : analysisData.score >= 5
+                      ? "#ff0"
+                      : "#f90"
+                  }">
+                      ${analysisData.score}/10
+                  </div>
+              </div>
+          </div>
+          
+          <!-- Chart Container -->
+          <div class="chart-container">
+              <canvas id="stockChart"></canvas>
+          </div>
+          
+          <!-- AI Analysis -->
+          <div class="analysis-section">
+              <h3 class="analysis-header">AI Analysis</h3>
+              <div style="margin-bottom: 15px;">
+                  <strong>Signals Detected:</strong>
+                  <ul style="margin-left: 20px; margin-top: 10px;">
+                      ${analysisData.reasons
+                        .map((r) => `<li>${r}</li>`)
+                        .join("")}
+                  </ul>
+              </div>
+              
+              <div style="margin-bottom: 15px;">
+                  <strong>Entry/Exit Suggestions:</strong>
+                  <div style="margin-top: 10px;">
+                      Support Entry: $${
+                        analysisData.suggestions?.support_entry?.toFixed(2) ||
+                        "N/A"
+                      }<br>
+                      Resistance Exit: $${
+                        analysisData.suggestions?.resistance_exit?.toFixed(2) ||
+                        "N/A"
+                      }<br>
+                      Stop Loss: $${
+                        analysisData.suggestions?.stop_loss?.toFixed(2) || "N/A"
+                      }
+                  </div>
+              </div>
+          </div>
+          
+          <!-- Fundamentals -->
+          ${
+            stockData.fundamentals
+              ? `
+          <div class="analysis-section">
+              <h3 class="analysis-header">Fundamentals</h3>
+              <div class="indicators-grid">
+                  <div class="indicator-card">
+                      <div class="indicator-label">Market Cap</div>
+                      <div class="indicator-value">$${(
+                        stockData.fundamentals.market_cap / 1000000000
+                      ).toFixed(2)}B</div>
+                  </div>
+                  <div class="indicator-card">
+                      <div class="indicator-label">P/E Ratio</div>
+                      <div class="indicator-value">${
+                        stockData.fundamentals.pe_ratio?.toFixed(2) || "N/A"
+                      }</div>
+                  </div>
+                  <div class="indicator-card">
+                      <div class="indicator-label">52W High</div>
+                      <div class="indicator-value">$${
+                        stockData.fundamentals["52_week_high"]?.toFixed(2) ||
+                        "N/A"
+                      }</div>
+                  </div>
+                  <div class="indicator-card">
+                      <div class="indicator-label">52W Low</div>
+                      <div class="indicator-value">$${
+                        stockData.fundamentals["52_week_low"]?.toFixed(2) ||
+                        "N/A"
+                      }</div>
+                  </div>
+              </div>
+          </div>
+          `
+              : ""
+          }
+          
+          <!-- News Section -->
+          ${
+            stockData.news && stockData.news.length > 0
+              ? `
+          <div class="analysis-section">
+              <h3 class="analysis-header">Latest News</h3>
+              <div class="news-section">
+                  ${stockData.news
+                    .slice(0, 3)
+                    .map(
+                      (news) => `
+                      <div class="news-item">
+                          <div class="news-title">${news.title}</div>
+                          <div class="news-meta">${news.publisher} - ${new Date(
+                        news.timestamp * 1000
+                      ).toLocaleDateString()}</div>
+                      </div>
+                  `
+                    )
+                    .join("")}
+              </div>
+          </div>
+          `
+              : ""
+          }
+      `;
+
+    document.getElementById("modalContent").innerHTML = html;
+
+    // Draw the chart
+    drawStockChart(stockData.daily_data, analysisData.chart_data);
+  }
+
+  // Draw stock chart
+  function drawStockChart(priceData, analysisData) {
+    const ctx = document.getElementById("stockChart").getContext("2d");
+
+    // Destroy existing chart if it exists
+    if (chartInstance) {
+      chartInstance.destroy();
+    }
+
+    // Prepare data
+    const labels = priceData.map((d) => d.date);
+    const prices = priceData.map((d) => d.close);
+    const volumes = priceData.map((d) => d.volume);
+
+    // Create chart
+    chartInstance = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "Price",
+            data: prices,
+            borderColor: "#0f0",
+            backgroundColor: "rgba(0, 255, 0, 0.1)",
+            borderWidth: 2,
+            tension: 0.4,
+            yAxisID: "y-price",
+          },
+          {
+            label: "Volume",
+            data: volumes,
+            type: "bar",
+            backgroundColor: "rgba(0, 255, 0, 0.3)",
+            yAxisID: "y-volume",
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: "index",
+          intersect: false,
+        },
+        plugins: {
+          legend: {
+            display: true,
+            labels: {
+              color: "#0f0",
+            },
+          },
+        },
+        scales: {
+          x: {
+            display: true,
+            grid: {
+              color: "rgba(0, 255, 0, 0.1)",
+            },
+            ticks: {
+              color: "#0f0",
+              maxRotation: 45,
+              minRotation: 45,
+            },
+          },
+          "y-price": {
+            type: "linear",
+            display: true,
+            position: "left",
+            grid: {
+              color: "rgba(0, 255, 0, 0.1)",
+            },
+            ticks: {
+              color: "#0f0",
+            },
+          },
+          "y-volume": {
+            type: "linear",
+            display: true,
+            position: "right",
+            grid: {
+              drawOnChartArea: false,
+            },
+            ticks: {
+              color: "#0f0",
+            },
+          },
+        },
+      },
+    });
+  }
+
+  // Search stocks
+  async function searchStocks() {
+    const query = document.getElementById("stockSearch").value.trim();
+    if (!query) return;
+
+    try {
+      const response = await axios.get(
+        `/api/search?q=${encodeURIComponent(query)}`
+      );
+      const results = response.data.results;
+
+      if (results.length > 0) {
+        displayStocks(results, "all");
+        switchTab("all");
+      } else {
+        alert("No stocks found matching your search");
+      }
+    } catch (error) {
+      console.error("Error searching stocks:", error);
+      alert("Error searching stocks");
+    }
+  }
+
+  // Clear search
+  function clearSearch() {
+    document.getElementById("stockSearch").value = "";
+    loadStocks("all");
+  }
+
+  // Close modal
+  function closeModal() {
+    document.getElementById("stockModal").style.display = "none";
+    if (chartInstance) {
+      chartInstance.destroy();
+      chartInstance = null;
+    }
+  }
+
+  // Handle enter key in search
+  document
+    .getElementById("stockSearch")
+    .addEventListener("keypress", function (e) {
+      if (e.key === "Enter") {
+        searchStocks();
+      }
+    });
+
+  // Close modal when clicking outside
+  window.onclick = function (event) {
+    const modal = document.getElementById("stockModal");
+    if (event.target === modal) {
+      closeModal();
+    }
+  };
+</script>

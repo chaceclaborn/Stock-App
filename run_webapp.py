@@ -95,7 +95,13 @@ def main():
     
     # Import only after checks pass
     try:
-        from src.web.app import run_app
+        # Add the current directory to Python path
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        if current_dir not in sys.path:
+            sys.path.insert(0, current_dir)
+        
+        # Import the Flask app
+        from src.web.app import app
         
         print(f"🌐 Starting server on port {args.port}...")
         print(f"📊 Open your browser and navigate to: http://localhost:{args.port}")
@@ -114,16 +120,29 @@ def main():
             browser_thread.start()
         
         # Run the app
-        run_app(debug=args.debug, port=args.port)
+        app.run(debug=args.debug, port=args.port, threaded=True)
         
     except ImportError as e:
         print(f"\n❌ Error importing required modules: {e}")
         print("Please check that all files are properly structured.")
+        print("\nExpected structure:")
+        print("  run_webapp.py (this file)")
+        print("  src/")
+        print("    ├── web/")
+        print("    │   ├── app.py")
+        print("    │   └── templates/")
+        print("    ├── data/")
+        print("    │   ├── fetcher.py")
+        print("    │   └── database.py")
+        print("    └── models/")
+        print("        └── predictor.py")
     except KeyboardInterrupt:
         print("\n\n👋 Shutting down Chace's Stock App...")
         print("Thanks for using the app!")
     except Exception as e:
         print(f"\n❌ Error starting application: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()

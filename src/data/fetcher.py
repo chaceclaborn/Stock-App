@@ -19,7 +19,19 @@ class StockDataFetcher:
     Includes company names, news, and enhanced analysis features.
     """
     
-    # Popular stock categories with names
+    # Stock categories for organization
+    STOCK_CATEGORIES = {
+        'mega_cap': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK.B'],
+        'tech': ['AAPL', 'MSFT', 'GOOGL', 'META', 'NVDA', 'TSLA', 'ORCL', 'CRM', 'ADBE', 'INTC', 'AMD', 'CSCO'],
+        'finance': ['JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'BLK', 'SCHW', 'AXP', 'V', 'MA', 'PYPL'],
+        'healthcare': ['UNH', 'JNJ', 'PFE', 'LLY', 'ABBV', 'MRK', 'TMO', 'ABT', 'CVS', 'AMGN', 'GILD', 'BMY'],
+        'consumer': ['AMZN', 'WMT', 'HD', 'PG', 'KO', 'PEP', 'COST', 'NKE', 'MCD', 'SBUX', 'TGT', 'DIS'],
+        'energy': ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'PXD', 'MPC', 'PSX', 'VLO', 'OXY'],
+        'etfs': ['SPY', 'QQQ', 'DIA', 'IWM', 'VTI', 'VOO', 'GLD', 'SLV', 'TLT', 'HYG'],
+        'crypto': ['BTC-USD', 'ETH-USD', 'BNB-USD', 'XRP-USD', 'ADA-USD', 'DOGE-USD']
+    }
+    
+    # Popular stocks with names (simplified list)
     STOCK_INFO = {
         'AAPL': 'Apple Inc.',
         'MSFT': 'Microsoft Corporation',
@@ -30,108 +42,47 @@ class StockDataFetcher:
         'TSLA': 'Tesla Inc.',
         'JPM': 'JPMorgan Chase & Co.',
         'BAC': 'Bank of America Corp.',
-        'GS': 'Goldman Sachs Group Inc.',
-        'MS': 'Morgan Stanley',
-        'WFC': 'Wells Fargo & Company',
-        'C': 'Citigroup Inc.',
-        'BLK': 'BlackRock Inc.',
-        'SCHW': 'Charles Schwab Corp.',
         'JNJ': 'Johnson & Johnson',
         'UNH': 'UnitedHealth Group Inc.',
         'PFE': 'Pfizer Inc.',
-        'ABBV': 'AbbVie Inc.',
-        'TMO': 'Thermo Fisher Scientific Inc.',
-        'MRK': 'Merck & Co. Inc.',
-        'ABT': 'Abbott Laboratories',
-        'CVS': 'CVS Health Corporation',
         'WMT': 'Walmart Inc.',
         'PG': 'Procter & Gamble Co.',
         'KO': 'The Coca-Cola Company',
+        'DIS': 'Walt Disney Company',
+        'HD': 'Home Depot Inc.',
+        'V': 'Visa Inc.',
+        'MA': 'Mastercard Inc.',
+        'NFLX': 'Netflix Inc.',
+        'ADBE': 'Adobe Inc.',
+        'CRM': 'Salesforce Inc.',
+        'PYPL': 'PayPal Holdings Inc.',
+        'INTC': 'Intel Corporation',
+        'AMD': 'Advanced Micro Devices Inc.',
+        'CSCO': 'Cisco Systems Inc.',
         'PEP': 'PepsiCo Inc.',
-        'MCD': "McDonald's Corporation",
-        'NKE': 'Nike Inc.',
-        'SBUX': 'Starbucks Corporation',
-        'TGT': 'Target Corporation',
-        'XOM': 'Exxon Mobil Corporation',
+        'TMO': 'Thermo Fisher Scientific Inc.',
+        'ABBV': 'AbbVie Inc.',
         'CVX': 'Chevron Corporation',
-        'COP': 'ConocoPhillips',
-        'SLB': 'Schlumberger NV',
-        'EOG': 'EOG Resources Inc.',
-        'MPC': 'Marathon Petroleum Corp.',
-        'PSX': 'Phillips 66',
-        'VLO': 'Valero Energy Corporation',
-        'BA': 'Boeing Company',
-        'CAT': 'Caterpillar Inc.',
-        'GE': 'General Electric Company',
-        'MMM': '3M Company',
-        'HON': 'Honeywell International Inc.',
-        'UPS': 'United Parcel Service Inc.',
-        'RTX': 'Raytheon Technologies Corp.',
-        'LMT': 'Lockheed Martin Corporation',
+        'MRK': 'Merck & Co. Inc.',
+        'NKE': 'Nike Inc.',
+        'LLY': 'Eli Lilly and Company',
+        'XOM': 'Exxon Mobil Corporation',
         'SPY': 'SPDR S&P 500 ETF Trust',
         'QQQ': 'Invesco QQQ Trust',
         'IWM': 'iShares Russell 2000 ETF',
         'DIA': 'SPDR Dow Jones Industrial Average ETF',
         'VTI': 'Vanguard Total Stock Market ETF',
-        'VOO': 'Vanguard S&P 500 ETF',
-        'EEM': 'iShares MSCI Emerging Markets ETF',
         'GLD': 'SPDR Gold Trust',
-        'COIN': 'Coinbase Global Inc.',
-        'MARA': 'Marathon Digital Holdings Inc.',
-        'RIOT': 'Riot Platforms Inc.',
-        'MSTR': 'MicroStrategy Inc.',
-        'SQ': 'Block Inc.',
-        'PYPL': 'PayPal Holdings Inc.',
-        'GME': 'GameStop Corp.',
-        'AMC': 'AMC Entertainment Holdings Inc.',
-        'BB': 'BlackBerry Ltd.',
-        'NOK': 'Nokia Corporation',
-        'BBBY': 'Bed Bath & Beyond Inc.',
-        'WISH': 'ContextLogic Inc.',
-        'CLOV': 'Clover Health Investments Corp.',
-        'ARKK': 'ARK Innovation ETF',
-        'ARKQ': 'ARK Autonomous Technology & Robotics ETF',
-        'ARKW': 'ARK Next Generation Internet ETF',
-        'ARKG': 'ARK Genomic Revolution ETF',
-        'ARKF': 'ARK Fintech Innovation ETF',
-        'AMD': 'Advanced Micro Devices Inc.',
-        'INTC': 'Intel Corporation',
-        'MU': 'Micron Technology Inc.',
-        'QCOM': 'QUALCOMM Inc.',
-        'AVGO': 'Broadcom Inc.',
-        'TXN': 'Texas Instruments Inc.',
-        'ADI': 'Analog Devices Inc.',
-        'MRVL': 'Marvell Technology Inc.',
-        'RIVN': 'Rivian Automotive Inc.',
-        'LCID': 'Lucid Group Inc.',
-        'NIO': 'NIO Inc.',
-        'XPEV': 'XPeng Inc.',
-        'LI': 'Li Auto Inc.',
-        'FSR': 'Fisker Inc.',
-        'GOEV': 'Canoo Inc.',
-        'PLTR': 'Palantir Technologies Inc.',
-        'C3AI': 'C3.ai Inc.',
-        'SNOW': 'Snowflake Inc.',
-        'PATH': 'UiPath Inc.',
-        'DDOG': 'Datadog Inc.',
-        'NET': 'Cloudflare Inc.',
-        'CRWD': 'CrowdStrike Holdings Inc.'
-    }
-    
-    STOCK_CATEGORIES = {
-        'mega_tech': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'TSLA'],
-        'finance': ['JPM', 'BAC', 'GS', 'MS', 'WFC', 'C', 'BLK', 'SCHW'],
-        'healthcare': ['JNJ', 'UNH', 'PFE', 'ABBV', 'TMO', 'MRK', 'ABT', 'CVS'],
-        'consumer': ['WMT', 'PG', 'KO', 'PEP', 'MCD', 'NKE', 'SBUX', 'TGT'],
-        'energy': ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX', 'VLO'],
-        'industrials': ['BA', 'CAT', 'GE', 'MMM', 'HON', 'UPS', 'RTX', 'LMT'],
-        'etfs': ['SPY', 'QQQ', 'IWM', 'DIA', 'VTI', 'VOO', 'EEM', 'GLD'],
-        'crypto_stocks': ['COIN', 'MARA', 'RIOT', 'MSTR', 'SQ', 'PYPL'],
-        'meme_stocks': ['GME', 'AMC', 'BB', 'NOK', 'BBBY', 'WISH', 'CLOV'],
-        'ark_invest': ['ARKK', 'ARKQ', 'ARKW', 'ARKG', 'ARKF'],
-        'semiconductor': ['AMD', 'INTC', 'MU', 'QCOM', 'AVGO', 'TXN', 'ADI', 'MRVL'],
-        'ev_stocks': ['RIVN', 'LCID', 'NIO', 'XPEV', 'LI', 'FSR', 'GOEV'],
-        'ai_stocks': ['PLTR', 'C3AI', 'SNOW', 'PATH', 'DDOG', 'NET', 'CRWD']
+        'ORCL': 'Oracle Corporation',
+        'COST': 'Costco Wholesale Corporation',
+        'BA': 'Boeing Company',
+        'CAT': 'Caterpillar Inc.',
+        'IBM': 'IBM Corporation',
+        'GS': 'Goldman Sachs Group Inc.',
+        'MS': 'Morgan Stanley',
+        'C': 'Citigroup Inc.',
+        'AMGN': 'Amgen Inc.',
+        'HON': 'Honeywell International Inc.'
     }
     
     def __init__(self, db=None):
@@ -139,6 +90,12 @@ class StockDataFetcher:
         self.db = db
         self.lock = Lock()
         logger.info("Enhanced Stock Data Fetcher initialized with real-time capabilities")
+    
+    def get_stocks_by_category(self, category):
+        """Get stocks for a specific category"""
+        if category in self.STOCK_CATEGORIES:
+            return self.STOCK_CATEGORIES[category]
+        return []
     
     def get_company_name(self, symbol):
         """Get company name for a symbol"""
@@ -160,22 +117,8 @@ class StockDataFetcher:
         return symbol  # Return symbol if name not found
     
     def get_all_tracked_stocks(self):
-        """Get all stocks we're tracking across all categories"""
-        all_stocks = []
-        for category, stocks in self.STOCK_CATEGORIES.items():
-            all_stocks.extend(stocks)
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_stocks = []
-        for stock in all_stocks:
-            if stock not in seen:
-                seen.add(stock)
-                unique_stocks.append(stock)
-        return unique_stocks
-    
-    def get_stocks_by_category(self, category):
-        """Get stocks for a specific category"""
-        return self.STOCK_CATEGORIES.get(category, [])
+        """Get all stocks we're tracking"""
+        return list(self.STOCK_INFO.keys())
     
     def search_stocks(self, query, limit=10):
         """Search for stocks by symbol or company name"""
@@ -508,15 +451,9 @@ class StockDataFetcher:
         return None
     
     def get_top_stocks(self):
-        """Return top stocks from multiple categories"""
-        top_stocks = []
-        # Get a mix from different categories
-        categories_to_include = ['mega_tech', 'finance', 'healthcare', 'etfs', 'meme_stocks']
-        for category in categories_to_include:
-            stocks = self.STOCK_CATEGORIES.get(category, [])
-            top_stocks.extend(stocks[:3])  # Top 3 from each category
-        
-        return top_stocks[:15]  # Return top 15
+        """Return top stocks to display"""
+        # Return first 15 stocks from our list
+        return list(self.STOCK_INFO.keys())[:15]
     
     def get_multiple_quotes(self, symbols):
         """Get quotes for multiple symbols efficiently."""
@@ -574,7 +511,7 @@ class StockDataFetcher:
     def get_stocks_for_analysis(self, symbols=None):
         """Get stock data prepared for technical analysis."""
         if symbols is None:
-            symbols = self.get_all_tracked_stocks()[:30]  # Limit to 30 for performance
+            symbols = self.get_all_tracked_stocks()
         
         stocks_data = {}
         
@@ -599,15 +536,8 @@ class StockDataFetcher:
                                 df = data[symbol]
                             
                             if not df.empty and len(df) >= 30:
-                                df = df.rename(columns={
-                                    'Open': 'open',
-                                    'High': 'high',
-                                    'Low': 'low',
-                                    'Close': 'close',
-                                    'Volume': 'volume'
-                                })
-                                
-                                df = df[['open', 'high', 'low', 'close', 'volume']]
+                                # Keep the original column names from yfinance
+                                # The predictor will handle both formats
                                 df = df.dropna()
                                 df = df.sort_index(ascending=True)
                                 
@@ -615,7 +545,16 @@ class StockDataFetcher:
                                 logger.info(f"Loaded {len(df)} days of data for {symbol}")
                                 
                                 if self.db:
-                                    db_df = df.sort_index(ascending=False)
+                                    # For database storage, convert to lowercase
+                                    db_df = df.rename(columns={
+                                        'Open': 'open',
+                                        'High': 'high',
+                                        'Low': 'low',
+                                        'Close': 'close',
+                                        'Volume': 'volume'
+                                    })
+                                    db_df = db_df[['open', 'high', 'low', 'close', 'volume']]
+                                    db_df = db_df.sort_index(ascending=False)
                                     self.db.store_historical_data(symbol, db_df)
                                     
                         except Exception as e:

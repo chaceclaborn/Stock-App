@@ -11,6 +11,19 @@ import re
 from textblob import TextBlob
 import yfinance as yf
 
+# Custom JSON encoder to handle numpy types
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif pd.isna(obj):
+            return None
+        return super(NumpyEncoder, self).default(obj)
+
 # Add parent directory to path so we can import our modules
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if parent_dir not in sys.path:
@@ -32,6 +45,28 @@ logger = logging.getLogger(__name__)
 # Create the Flask app
 app = Flask(__name__, 
             template_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates'))
+
+# Custom JSON encoder for Flask 2.x
+from flask.json.provider import DefaultJSONProvider
+
+class CustomJSONProvider(DefaultJSONProvider):
+    def default(self, obj):
+        if isinstance(obj, (np.integer, np.int64)):
+            return int(obj)
+        elif isinstance(obj, (np.floating, np.float64)):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif pd.isna(obj):
+            return None
+        return super().default(obj)
+
+# Set the custom JSON provider
+app.json = CustomJSONProvider(app)
+
+# Ensure the partials directory exists
+partials_dir = os.path.join(app.template_folder, 'partials')
+os.makedirs(partials_dir, exist_ok=True)
 
 # Set the database path
 db_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
@@ -363,78 +398,159 @@ def get_stocks():
     try:
         now = datetime.now()
         
-        # Only update if it's been more than update_interval seconds or forced
-        if (last_update_time is None or
-            (now - last_update_time).total_seconds() >= update_interval or
-            force_refresh):
-            
-            # Get stocks based on category
-            if category == 'all':
-                symbols = fetcher.get_all_tracked_stocks()[:50]  # Limit to 50
-            elif category == 'trending':
-                # Get stocks with high volume or big moves
-                symbols = fetcher.get_top_stocks()
-            else:
-                symbols = fetcher.get_stocks_by_category(category)
-            
-            # Get quotes for the stocks
-            quotes = fetcher.get_multiple_quotes(symbols)
-            
-            # Add sentiment data for each stock
-            for quote in quotes:
-                sentiment = sentiment_analyzer.get_market_sentiment(quote['symbol'], include_social=False)
-                quote['sentiment'] = sentiment['overall']
-                quote['sentiment_description'] = sentiment['description']
-            
-            # Sort based on criteria
-            if sort_by == 'change':
-                quotes.sort(key=lambda x: x.get('change', 0), reverse=True)
-            elif sort_by == 'volume':
-                quotes.sort(key=lambda x: x.get('volume', 0), reverse=True)
-            elif sort_by == 'sentiment':
-                quotes.sort(key=lambda x: x.get('sentiment', 0.5), reverse=True)
-            
-            # Update last update time
-            last_update_time = now
-            
-            # Get stock categories for UI
-            categories = list(fetcher.STOCK_CATEGORIES.keys())
-            
-            return jsonify({
-                'stocks': quotes,
-                'categories': categories,
-                'last_updated': now.strftime('%Y-%m-%d %H:%M:%S'),
-                'next_update': (now + timedelta(seconds=update_interval)).strftime('%Y-%m-%d %H:%M:%S'),
-                'status': 'ok',
-                'from_cache': False
-            })
+        # Get stocks based on category
+        if category == 'all':
+            symbols = fetcher.get_all_tracked_stocks()[:50]  # Limit to 50
+        elif category == 'trending':
+            # Get stocks with high volume or big moves
+            symbols = fetcher.get_top_stocks()
         else:
-            # Return cached result
-            cached_quotes = fetcher.get_multiple_quotes(fetcher.get_top_stocks())
-            
-            # Add cached sentiment
-            for quote in cached_quotes:
-                if quote['symbol'] in sentiment_cache:
-                    quote['sentiment'] = sentiment_cache[quote['symbol']]['overall']
-                    quote['sentiment_description'] = sentiment_cache[quote['symbol']]['description']
-            
-            return jsonify({
-                'stocks': cached_quotes,
-                'categories': list(fetcher.STOCK_CATEGORIES.keys()),
-                'last_updated': last_update_time.strftime('%Y-%m-%d %H:%M:%S'),
-                'next_update': (last_update_time + timedelta(seconds=update_interval)).strftime('%Y-%m-%d %H:%M:%S'),
-                'status': 'cached',
+            symbols = fetcher.get_stocks_by_category(category)
+        
+        # Always try to get cached data first
+        cached_quotes = db.get_latest_quotes(symbols)
+        
+        # Convert cached data to the expected format
+        quotes = []
+        for quote in cached_quotes:
+            formatted_quote = {
+                'symbol': quote['symbol'],
+                'name': fetcher.get_company_name(quote['symbol']),
+                'price': quote['price'],
+                'change': quote['change'],
+                'change_percent': quote['change_percent'],
+                'volume': quote['volume'],
+                'last_updated': quote['timestamp'],
                 'from_cache': True
-            })
+            }
+            quotes.append(formatted_quote)
+        
+        # Only fetch new data if forced or enough time has passed
+        should_update = (
+            force_refresh or 
+            last_update_time is None or
+            (now - last_update_time).total_seconds() >= update_interval or
+            len(quotes) < len(symbols) * 0.5  # Less than 50% of requested stocks in cache
+        )
+        
+        if should_update:
+            try:
+                # Try to get fresh quotes
+                fresh_quotes = fetcher.get_multiple_quotes(symbols)
+                if fresh_quotes:
+                    quotes = fresh_quotes
+                    last_update_time = now
+                    logger.info(f"Updated {len(fresh_quotes)} stock quotes")
+            except Exception as e:
+                logger.error(f"Error fetching fresh quotes: {e}")
+                # Continue with cached data
+        
+        # Add sentiment data for each stock
+        for quote in quotes:
+            sentiment = sentiment_analyzer.get_market_sentiment(quote['symbol'], include_social=False)
+            quote['sentiment'] = sentiment['overall']
+            quote['sentiment_description'] = sentiment['description']
+        
+        # Sort based on criteria
+        if sort_by == 'change':
+            quotes.sort(key=lambda x: x.get('change', 0), reverse=True)
+        elif sort_by == 'volume':
+            quotes.sort(key=lambda x: x.get('volume', 0), reverse=True)
+        elif sort_by == 'sentiment':
+            quotes.sort(key=lambda x: x.get('sentiment', 0.5), reverse=True)
+        
+        # Get stock categories for UI
+        categories = list(fetcher.STOCK_CATEGORIES.keys())
+        
+        # Determine the actual last update time
+        if quotes:
+            # Find the most recent timestamp from quotes
+            quote_times = []
+            for q in quotes:
+                try:
+                    quote_time = datetime.fromisoformat(q.get('last_updated', ''))
+                    quote_times.append(quote_time)
+                except:
+                    pass
+            
+            if quote_times:
+                actual_last_update = max(quote_times)
+            else:
+                actual_last_update = now
+        else:
+            actual_last_update = now
+        
+        return jsonify({
+            'stocks': quotes,
+            'categories': categories,
+            'last_updated': actual_last_update.strftime('%Y-%m-%d %H:%M:%S'),
+            'next_update': (now + timedelta(seconds=update_interval)).strftime('%Y-%m-%d %H:%M:%S'),
+            'status': 'ok' if should_update and fresh_quotes else 'cached',
+            'from_cache': not (should_update and fresh_quotes)
+        })
             
     except Exception as e:
         logger.error(f"Error getting stock data: {str(e)}")
         
+        # Try to return cached data even on error
+        try:
+            cached_quotes = db.get_latest_quotes(limit=50)
+            quotes = []
+            for quote in cached_quotes:
+                formatted_quote = {
+                    'symbol': quote['symbol'],
+                    'name': fetcher.get_company_name(quote['symbol']),
+                    'price': quote['price'],
+                    'change': quote['change'],
+                    'change_percent': quote['change_percent'],
+                    'volume': quote['volume'],
+                    'last_updated': quote['timestamp'],
+                    'from_cache': True
+                }
+                quotes.append(formatted_quote)
+            
+            return jsonify({
+                'stocks': quotes,
+                'categories': list(fetcher.STOCK_CATEGORIES.keys()),
+                'last_updated': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'status': 'cached_error',
+                'error': str(e),
+                'from_cache': True
+            })
+        except:
+            return jsonify({
+                'error': f'Error retrieving stock data: {str(e)}',
+                'stocks': [],
+                'categories': list(fetcher.STOCK_CATEGORIES.keys()),
+                'last_updated': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'status': 'error'
+            }), 500
+
+@app.route('/api/stocks/realtime')
+def get_realtime_updates():
+    """API endpoint for real-time stock updates"""
+    try:
+        # Get symbols from request
+        symbols = request.args.get('symbols', '').split(',')
+        if not symbols or symbols == ['']:
+            return jsonify({'error': 'No symbols provided'}), 400
+        
+        # Limit to 20 symbols for performance
+        symbols = symbols[:20]
+        
+        # Get real-time quotes
+        quotes = fetcher.get_multiple_quotes(symbols)
+        
         return jsonify({
-            'error': f'Error retrieving stock data: {str(e)}',
-            'stocks': [],
-            'categories': list(fetcher.STOCK_CATEGORIES.keys()),
-            'last_updated': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'quotes': quotes,
+            'timestamp': datetime.now().isoformat(),
+            'status': 'ok'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting realtime updates: {str(e)}")
+        return jsonify({
+            'error': f'Error getting realtime updates: {str(e)}',
             'status': 'error'
         }), 500
 
@@ -630,8 +746,19 @@ def get_predictions():
                     # Convert DataFrame to list of dicts
                     opportunities = opportunities_df.to_dict('records')
                     
-                    # Add company names and sentiment
+                    # Convert any numpy types to native Python types
                     for opp in opportunities:
+                        # Convert numeric values
+                        for key in ['score', 'price', 'rsi', 'volatility', 'volume_trend', 'ma_signal']:
+                            if key in opp and opp[key] is not None:
+                                if isinstance(opp[key], (np.integer, np.int64)):
+                                    opp[key] = int(opp[key])
+                                elif isinstance(opp[key], (np.floating, np.float64)):
+                                    opp[key] = float(opp[key])
+                                elif pd.isna(opp[key]):
+                                    opp[key] = None
+                        
+                        # Add company names and sentiment
                         opp['name'] = fetcher.get_company_name(opp['ticker'])
                         sentiment = sentiment_analyzer.get_market_sentiment(opp['ticker'])
                         opp['sentiment'] = sentiment
@@ -688,6 +815,16 @@ def get_stock_analysis(symbol):
         # Sort data chronologically for analysis
         df = df.sort_index(ascending=True)
         
+        # Ensure column names are lowercase for the predictor
+        if 'Close' in df.columns:
+            df = df.rename(columns={
+                'Open': 'open',
+                'High': 'high',
+                'Low': 'low',
+                'Close': 'close',
+                'Volume': 'volume'
+            })
+        
         # Analyze the stock
         indicators_df = predictor.analyze_stock(symbol.upper(), df)
         
@@ -722,8 +859,8 @@ def get_stock_analysis(symbol):
             }
             chart_data.append(chart_point)
         
-        # Score the current opportunity
-        score, reasons, signals = predictor.score_opportunity(latest, indicators_df)
+        # Score the current opportunity - pass the correct parameters
+        score, reasons, signals, patterns = predictor.score_opportunity(latest, indicators_df)
         
         # Get company name
         name = fetcher.get_company_name(symbol.upper())
@@ -731,17 +868,39 @@ def get_stock_analysis(symbol):
         # Get real-time metrics
         realtime = fetcher.get_realtime_metrics(symbol.upper())
         
+        # Convert numpy types to Python native types for JSON serialization
+        def convert_to_native(obj):
+            """Convert numpy types to native Python types"""
+            if isinstance(obj, np.integer):
+                return int(obj)
+            elif isinstance(obj, np.floating):
+                return float(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, dict):
+                return {k: convert_to_native(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_to_native(i) for i in obj]
+            return obj
+        
+        # Convert all the data
+        current_indicators = {
+            'price': float(latest['Close']),
+            'rsi': float(latest['RSI']) if pd.notna(latest.get('RSI')) else None,
+            'volatility': float(latest['Volatility']) if pd.notna(latest.get('Volatility')) else None,
+            'volume_trend': float(latest['Volume_Trend']) if pd.notna(latest.get('Volume_Trend')) else None,
+            'ma_signal': int(latest['Signal']) if pd.notna(latest.get('Signal')) else 0
+        }
+        
+        # Convert signals and suggestions to ensure no numpy types
+        signals = convert_to_native(signals)
+        suggestions = convert_to_native(suggestions)
+        
         return jsonify({
             'symbol': symbol.upper(),
             'name': name,
-            'current_indicators': {
-                'price': float(latest['Close']),
-                'rsi': float(latest['RSI']) if pd.notna(latest.get('RSI')) else None,
-                'volatility': float(latest['Volatility']) if pd.notna(latest.get('Volatility')) else None,
-                'volume_trend': float(latest['Volume_Trend']) if pd.notna(latest.get('Volume_Trend')) else None,
-                'ma_signal': int(latest['Signal']) if pd.notna(latest.get('Signal')) else 0
-            },
-            'score': score,
+            'current_indicators': current_indicators,
+            'score': int(score),
             'reasons': reasons,
             'signals': signals,
             'suggestions': suggestions,
@@ -752,7 +911,7 @@ def get_stock_analysis(symbol):
         })
         
     except Exception as e:
-        logger.error(f"Error analyzing {symbol}: {str(e)}")
+        logger.error(f"Error analyzing {symbol}: {str(e)}", exc_info=True)
         return jsonify({
             'error': f'Error analyzing stock: {str(e)}'
         }), 500
@@ -799,6 +958,50 @@ def get_stock_sentiment(symbol):
         return jsonify({
             'error': f'Error getting sentiment: {str(e)}'
         }), 500
+
+@app.route('/api/stocks/cached')
+def get_cached_stocks():
+    """Get cached stocks immediately from database"""
+    try:
+        # Get all cached quotes from database
+        cached_quotes = db.get_latest_quotes(limit=100)
+        
+        quotes = []
+        for quote in cached_quotes:
+            formatted_quote = {
+                'symbol': quote['symbol'],
+                'name': fetcher.get_company_name(quote['symbol']),
+                'price': quote['price'],
+                'change': quote['change'],
+                'change_percent': quote['change_percent'],
+                'volume': quote['volume'],
+                'last_updated': quote['timestamp'],
+                'from_cache': True
+            }
+            quotes.append(formatted_quote)
+        
+        return jsonify({
+            'stocks': quotes,
+            'last_updated': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'status': 'cached',
+            'from_cache': True
+        })
+    except Exception as e:
+        logger.error(f"Error getting cached stocks: {str(e)}")
+        return jsonify({
+            'stocks': [],
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+@app.route('/api/portfolio')
+def get_portfolio():
+    """Get user's portfolio from localStorage via frontend"""
+    # Portfolio is stored in browser localStorage
+    # This endpoint just returns empty, frontend handles portfolio
+    return jsonify({
+        'message': 'Portfolio is managed in browser localStorage'
+    })
 
 @app.errorhandler(404)
 def page_not_found(e):
