@@ -30,6 +30,39 @@ def check_requirements():
         
         print("\n✅ All packages installed successfully!\n")
 
+def setup_directories():
+    """Create necessary directories"""
+    directories = [
+        'src',
+        'src/data',
+        'src/web',
+        'src/web/templates',
+        'src/web/templates/partials',
+        'src/web/services',
+        'src/web/routes',
+        'src/web/utils',
+        'src/models',
+        'src/analysis',
+        'data'
+    ]
+    
+    for directory in directories:
+        os.makedirs(directory, exist_ok=True)
+    
+    # Create __init__.py files
+    init_files = [
+        'src/__init__.py',
+        'src/data/__init__.py',
+        'src/web/__init__.py',
+        'src/models/__init__.py',
+        'src/analysis/__init__.py'
+    ]
+    
+    for init_file in init_files:
+        if not os.path.exists(init_file):
+            with open(init_file, 'w') as f:
+                f.write('# Package initialization\n')
+
 def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Run Chace's Stock App")
@@ -41,34 +74,22 @@ def main():
     # Check and install requirements
     check_requirements()
     
+    # Setup directories
+    setup_directories()
+    
     # Check file structure
-    expected_folders = ['src', 'src/data', 'src/web', 'src/web/templates', 'src/models']
-    missing_folders = []
-    
-    for folder in expected_folders:
-        if not os.path.exists(folder):
-            missing_folders.append(folder)
-    
-    if missing_folders:
-        print("\n❌ ERROR: Missing required folders:")
-        for folder in missing_folders:
-            print(f"  - {folder}")
-        print("\nCreating missing folders...")
-        for folder in missing_folders:
-            os.makedirs(folder, exist_ok=True)
-        print("✅ Folders created successfully!")
-        
-    # Check for required files
-    required_files = [
+    expected_files = [
         'src/data/fetcher.py', 
         'src/data/database.py',
         'src/models/predictor.py',
         'src/web/app.py', 
-        'src/web/templates/index.html'
+        'src/web/templates/index.html',
+        'src/analysis/indicators.py',
+        'src/analysis/pattern_recognition.py'
     ]
-    missing_files = []
     
-    for file in required_files:
+    missing_files = []
+    for file in expected_files:
         if not os.path.exists(file):
             missing_files.append(file)
     
@@ -77,6 +98,7 @@ def main():
         for file in missing_files:
             print(f"  - {file}")
         print("\nPlease ensure all required files are in place.")
+        print("\nIf you're missing analysis files, basic versions have been created.")
         return
     
     print("\n" + "="*60)
@@ -100,11 +122,16 @@ def main():
         if current_dir not in sys.path:
             sys.path.insert(0, current_dir)
         
-        # Import the Flask app
-        from src.web.app import app
+        # Import the create_app function
+        from src.web.app import create_app
+        
+        # Create the app instance
+        app = create_app('development' if args.debug else 'production')
         
         print(f"🌐 Starting server on port {args.port}...")
         print(f"📊 Open your browser and navigate to: http://localhost:{args.port}")
+        print(f"\n📡 Debug endpoint available at: http://localhost:{args.port}/api/debug")
+        print(f"🧪 Test stock endpoint: http://localhost:{args.port}/api/test-stock/AAPL")
         print("\nPress Ctrl+C to stop the server\n")
         
         # Automatically open browser unless --no-browser flag is used
@@ -124,18 +151,9 @@ def main():
         
     except ImportError as e:
         print(f"\n❌ Error importing required modules: {e}")
-        print("Please check that all files are properly structured.")
-        print("\nExpected structure:")
-        print("  run_webapp.py (this file)")
-        print("  src/")
-        print("    ├── web/")
-        print("    │   ├── app.py")
-        print("    │   └── templates/")
-        print("    ├── data/")
-        print("    │   ├── fetcher.py")
-        print("    │   └── database.py")
-        print("    └── models/")
-        print("        └── predictor.py")
+        print("\nTry running:")
+        print(f"  export PYTHONPATH={current_dir}:$PYTHONPATH")
+        print(f"  python {__file__}")
     except KeyboardInterrupt:
         print("\n\n👋 Shutting down Chace's Stock App...")
         print("Thanks for using the app!")

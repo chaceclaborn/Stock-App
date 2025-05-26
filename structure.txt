@@ -1,18 +1,68 @@
-G:\Coding\Stocks\
-├── src/
-│   ├── data/
+stock-app/
+├── run_webapp.py              # Main entry point
+├── setup_project.py           # Project setup script
+├── requirements.txt           # Python dependencies
+├── .gitignore                # Git ignore file
+├── README.md                 # Project documentation
+│
+├── src/                      # Source code
+│   ├── __init__.py
+│   │
+│   ├── web/                  # Web application layer
 │   │   ├── __init__.py
-│   │   └── fetcher.py
-│   ├── analysis/
+│   │   ├── app.py           # Flask app setup (refactored)
+│   │   │
+│   │   ├── routes/          # API endpoints (NEW)
+│   │   │   ├── __init__.py
+│   │   │   ├── stocks.py    # Stock data endpoints
+│   │   │   ├── analysis.py  # Technical analysis endpoints
+│   │   │   ├── predictions.py # AI prediction endpoints
+│   │   │   ├── market.py    # Market overview endpoints
+│   │   │   └── portfolio.py # Portfolio endpoints
+│   │   │
+│   │   ├── services/        # Business logic (NEW)
+│   │   │   ├── __init__.py
+│   │   │   ├── stock_service.py      # Stock data operations
+│   │   │   ├── analysis_service.py   # Analysis operations
+│   │   │   ├── prediction_service.py # AI predictions
+│   │   │   ├── market_service.py     # Market data
+│   │   │   └── sentiment_service.py  # Sentiment analysis
+│   │   │
+│   │   ├── utils/           # Utilities (NEW)
+│   │   │   ├── __init__.py
+│   │   │   └── api_response.py # Standardized responses
+│   │   │
+│   │   └── templates/       # HTML templates
+│   │       ├── index.html
+│   │       └── partials/
+│   │           ├── header.html
+│   │           ├── overview.html
+│   │           ├── scripts.html
+│   │           ├── search.html
+│   │           ├── stock_modal.html
+│   │           ├── stocks_grid.html
+│   │           ├── styles.html
+│   │           └── tabs.html
+│   │
+│   ├── data/                # Data layer (KEEP THIS!)
 │   │   ├── __init__.py
-│   │   └── indicators.py
-│   ├── models/
+│   │   ├── database.py      # Database operations
+│   │   └── fetcher.py       # Stock data fetching
+│   │
+│   ├── models/              # AI/ML models (KEEP THIS!)
 │   │   ├── __init__.py
-│   │   └── predictor.py
-│   ├── web/
-│   │   ├── __init__.py
-│   │   ├── app.py
-│   │   └── templates/
-│   │       └── index.html
-│   └── __init__.py
-└── run_webapp.py
+│   │   └── predictor.py     # Trading predictor
+│   │
+│   └── analysis/            # Technical analysis (KEEP THIS!)
+│       ├── __init__.py
+│       ├── indicators.py    # Technical indicators
+│       └── pattern_recognition.py # Chart patterns
+│
+├── data/                    # Database files (auto-created)
+│   ├── stock_data.db       # SQLite database
+│   └── ai_feedback.db      # AI learning database
+│
+└── tests/                   # Test files (future)
+    ├── __init__.py
+    ├── unit/
+    └── integration/
