@@ -8,7 +8,7 @@ import time
 
 def check_requirements():
     """Check if required packages are installed"""
-    required_packages = ['flask', 'yfinance', 'pandas', 'numpy', 'requests', 'textblob','scypi']
+    required_packages = ['flask', 'yfinance', 'pandas', 'numpy', 'requests', 'textblob','scipy']
     missing_packages = []
     
     for package in required_packages:
@@ -113,6 +113,7 @@ def main():
     print("   💚 Clean black, green & white theme")
     print("   🔮 Market sentiment analysis")
     print("   📉 Enhanced individual stock pages")
+    print("   📊 Performance tracking & analytics")
     print("\n" + "="*60 + "\n")
     
     # Import only after checks pass

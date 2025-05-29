@@ -44,6 +44,7 @@ def init_services(app):
         from .prediction_service import PredictionService
         from .market_service import MarketService
         from .sentiment_service import MarketSentimentAnalyzer
+        from .performance_tracker_service import PerformanceTrackerService
         
         # Stock service
         stock_service = StockService()
@@ -68,6 +69,15 @@ def init_services(app):
         # Sentiment analyzer
         sentiment_analyzer = MarketSentimentAnalyzer()
         _services['sentiment'] = sentiment_analyzer
+        
+        # Performance tracker service (NEW)
+        performance_tracker = PerformanceTrackerService()
+        performance_tracker.init_app(db, fetcher, predictor)
+        _services['performance_tracker'] = performance_tracker
+        
+        # Start automated tracking
+        performance_tracker.start_automated_tracking()
+        logger.info("Started automated performance tracking")
         
         # Store in app context
         app.extensions['services'] = _services

@@ -1,24 +1,19 @@
 // stock-app.js - Main Application Controller
 const StockApp = {
-    // Application state
     updateInterval: null,
     cachedStocks: {},
     
-    // Initialize application
     async init() {
         console.log('Initializing Stock Analyzer...');
         
-        // Initialize modules
         StockPortfolio.init();
         
-        // Load initial data
         await this.loadCachedStocks();
         this.loadMarketOverview();
         this.loadStocks('all');
         this.loadPredictions();
         this.loadPortfolio();
         
-        // Set up auto-refresh
         this.updateInterval = setInterval(() => {
             const currentTab = StockUI.currentTab;
             if (currentTab === 'overview') {
@@ -30,25 +25,19 @@ const StockApp = {
             } else {
                 this.loadStocks(currentTab);
             }
-        }, 30000); // 30 seconds
+        }, 30000);
         
-        // Setup event handlers
         this.setupEventHandlers();
-        
-        // Run diagnostics
         setTimeout(() => this.checkAPIStatus(), 1000);
     },
     
-    // Setup event handlers
     setupEventHandlers() {
-        // Search
         document.getElementById('stockSearch')?.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 this.searchStocks();
             }
         });
         
-        // Modal close
         window.onclick = (event) => {
             const modal = document.getElementById('stockModal');
             if (event.target === modal) {
@@ -57,18 +46,25 @@ const StockApp = {
         };
     },
     
-    // Switch tab
     switchTab(tab) {
-        // Update UI
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        event.target.classList.add('active');
+        
+        const tabElements = document.querySelectorAll('.tab');
+        tabElements.forEach(t => {
+            const onclick = t.getAttribute('onclick');
+            if (onclick && onclick.includes(`'${tab}'`)) {
+                t.classList.add('active');
+            }
+        });
         
         document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
-        document.getElementById(tab).classList.add('active');
+        const contentElement = document.getElementById(tab);
+        if (contentElement) {
+            contentElement.classList.add('active');
+        }
         
         StockUI.currentTab = tab;
         
-        // Load data for tab
         switch(tab) {
             case 'overview':
                 this.loadMarketOverview();
@@ -84,7 +80,6 @@ const StockApp = {
         }
     },
     
-    // Load cached stocks
     async loadCachedStocks() {
         try {
             console.log('Loading cached stocks...');
@@ -108,26 +103,22 @@ const StockApp = {
         }
     },
     
-    // Load stocks
     async loadStocks(category) {
         try {
             console.log(`Loading stocks for category: ${category}`);
             
-            // Show cached data immediately
             if (Object.keys(this.cachedStocks).length > 0) {
                 const cachedArray = Object.values(this.cachedStocks);
                 StockUI.displayStocks(cachedArray, 'allGrid');
                 StockUI.updateLastUpdated('all', new Date().toISOString(), true);
             }
             
-            // Fetch fresh data
             const response = await StockAPI.getStocks(category);
             
             if (response.data && response.data.length > 0) {
                 StockUI.displayStocks(response.data, 'allGrid');
                 StockUI.updateLastUpdated(category, response.last_updated || new Date().toISOString(), response.from_cache);
                 
-                // Update cache
                 response.data.forEach(stock => {
                     this.cachedStocks[stock.symbol] = stock;
                 });
@@ -137,7 +128,6 @@ const StockApp = {
         } catch (error) {
             console.error('Error loading stocks:', error);
             
-            // Show cached data on error
             if (Object.keys(this.cachedStocks).length > 0) {
                 const cachedArray = Object.values(this.cachedStocks);
                 StockUI.displayStocks(cachedArray, 'allGrid');
@@ -147,7 +137,6 @@ const StockApp = {
         }
     },
     
-    // Load market overview
     async loadMarketOverview() {
         try {
             console.log('Loading market overview...');
@@ -168,7 +157,6 @@ const StockApp = {
         }
     },
     
-    // Load predictions
     async loadPredictions() {
         try {
             console.log('Loading AI predictions...');
@@ -188,7 +176,6 @@ const StockApp = {
         }
     },
     
-    // Display predictions
     displayPredictions(opportunities) {
         let html = '';
         
@@ -218,13 +205,11 @@ const StockApp = {
         document.getElementById('predictionsGrid').innerHTML = html;
     },
     
-    // Load portfolio
     loadPortfolio() {
         StockPortfolio.display(this.cachedStocks);
         StockUI.updateLastUpdated('portfolio', new Date().toISOString());
     },
     
-    // Search stocks
     async searchStocks() {
         const query = document.getElementById('stockSearch').value.trim();
         if (!query) return;
@@ -245,13 +230,11 @@ const StockApp = {
         }
     },
     
-    // Clear search
     clearSearch() {
         document.getElementById('stockSearch').value = '';
         this.loadStocks('all');
     },
     
-    // Check API status
     async checkAPIStatus() {
         try {
             const response = await StockAPI.getDebugInfo();
@@ -261,8 +244,3 @@ const StockApp = {
         }
     }
 };
-
-// Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-    StockApp.init();
-});

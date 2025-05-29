@@ -326,7 +326,7 @@ class AILearningEngine:
             logger.error(f"Error recording feedback: {e}")
 
 class DayTradePredictor:
-    """Enhanced day trading predictor with AI capabilities and period-specific analysis"""
+    """Enhanced day trading predictor with AI capabilities and dual prediction models"""
     
     def __init__(self):
         """Initialize with default parameters"""
@@ -358,40 +358,62 @@ class DayTradePredictor:
         
         # Period-specific parameters
         self.period_params = {
-            '1d': {
+            '1d': {  # Short-term (day trading)
                 'rsi_oversold': 30,
                 'rsi_overbought': 70,
                 'min_volatility': 0.01,
                 'volume_surge': 1.5,
                 'ma_short': 5,
-                'ma_long': 10
+                'ma_long': 10,
+                'pattern_weight': 1.2,
+                'momentum_weight': 1.5,
+                'volume_weight': 1.3
             },
-            '1w': {
+            '1w': {  # Medium-term (swing trading)
                 'rsi_oversold': 35,
                 'rsi_overbought': 65,
                 'min_volatility': 0.02,
                 'volume_surge': 1.3,
                 'ma_short': 10,
-                'ma_long': 20
+                'ma_long': 20,
+                'pattern_weight': 1.3,
+                'momentum_weight': 1.2,
+                'volume_weight': 1.1
             },
-            '1m': {
+            '1m': {  # Long-term (position trading)
                 'rsi_oversold': 40,
                 'rsi_overbought': 60,
                 'min_volatility': 0.05,
                 'volume_surge': 1.2,
                 'ma_short': 20,
-                'ma_long': 50
+                'ma_long': 50,
+                'pattern_weight': 1.5,
+                'momentum_weight': 1.0,
+                'volume_weight': 0.9
             },
-            '1y': {
+            '1y': {  # Investment timeframe
                 'rsi_oversold': 45,
                 'rsi_overbought': 55,
                 'min_volatility': 0.10,
                 'volume_surge': 1.1,
                 'ma_short': 50,
-                'ma_long': 200
+                'ma_long': 200,
+                'pattern_weight': 1.0,
+                'momentum_weight': 0.8,
+                'volume_weight': 0.7
             }
         }
-    
+        
+        # Learned weights for different predictors
+        self.short_term_weights = {
+            'patterns': {},
+            'signals': {}
+        }
+        
+        self.long_term_weights = {
+            'patterns': {},
+            'signals': {}
+        }
     def set_period_parameters(self, period='1d'):
         """Set parameters based on trading period"""
         params = self.period_params.get(period, self.period_params['1d'])

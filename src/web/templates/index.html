@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chace's Stock Analyzer</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     {% include 'partials/styles.html' %}
   </head>
   <body>
@@ -14,7 +13,7 @@
     <div class="container">
       {% include 'partials/search.html' %} {% include 'partials/tabs.html' %} {%
       include 'partials/overview.html' %} {% include 'partials/stocks_grid.html'
-      %}
+      %} {% include 'partials/performance.html' %}
     </div>
 
     {% include 'partials/stock_modal.html' %} {% include 'partials/scripts.html'

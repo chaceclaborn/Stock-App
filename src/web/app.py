@@ -5,7 +5,7 @@ Main Flask application setup - Refactored for modularity
 import os
 import sys
 import logging
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, send_from_directory
 from flask.json.provider import DefaultJSONProvider
 import numpy as np
 import pandas as pd
@@ -38,9 +38,14 @@ class CustomJSONProvider(DefaultJSONProvider):
 def create_app(config_name='development'):
     """Application factory pattern"""
     
-    # Create Flask app
+    # Get the directory where this file is located
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Create Flask app with proper paths
     app = Flask(__name__,
-                template_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates'))
+                template_folder=os.path.join(base_dir, 'templates'),
+                static_folder=os.path.join(base_dir, 'static'),
+                static_url_path='/static')
     
     # Set custom JSON provider
     app.json = CustomJSONProvider(app)
@@ -58,6 +63,11 @@ def create_app(config_name='development'):
     # Ensure template directories exist
     partials_dir = os.path.join(app.template_folder, 'partials')
     os.makedirs(partials_dir, exist_ok=True)
+    
+    # Ensure static directories exist
+    static_js_dir = os.path.join(app.static_folder, 'js')
+    static_modules_dir = os.path.join(static_js_dir, 'modules')
+    os.makedirs(static_modules_dir, exist_ok=True)
     
     # Initialize services (moved to separate initialization file)
     try:
@@ -83,6 +93,12 @@ def create_app(config_name='development'):
         """Render the main page"""
         return render_template('index.html')
     
+    # Static file serving route (explicit)
+    @app.route('/static/<path:path>')
+    def send_static(path):
+        """Serve static files"""
+        return send_from_directory(app.static_folder, path)
+    
     # Debug endpoint
     @app.route('/api/debug')
     def debug_info():
@@ -96,7 +112,9 @@ def create_app(config_name='development'):
             'services_initialized': False,
             'services_count': 0,
             'services_available': [],
-            'errors': []
+            'errors': [],
+            'static_folder': app.static_folder,
+            'template_folder': app.template_folder
         }
         
         try:
@@ -194,17 +212,27 @@ def create_app(config_name='development'):
         }
     
     logger.info(f"Created Flask app with config: {config_name}")
+    logger.info(f"Static folder: {app.static_folder}")
+    logger.info(f"Template folder: {app.template_folder}")
+    
     return app
 
 def run_app(debug=True, port=5000):
     """Run the Flask application"""
     app = create_app('development' if debug else 'production')
     
+    # Suppress the werkzeug startup banner if not in debug mode
+    if not debug:
+        import logging
+        log = logging.getLogger('werkzeug')
+        log.setLevel(logging.ERROR)
+    
     logger.info(f"Starting Enhanced Stock Market Analyzer on port {port}")
     logger.info("Features: Real-time data, Market sentiment analysis, AI predictions")
     logger.info("Using Yahoo Finance for real-time stock data.")
     
-    app.run(debug=debug, port=port, threaded=True)
+    # Run with reloader disabled to prevent duplicate output
+    app.run(debug=debug, port=port, threaded=True, use_reloader=False)
 
 if __name__ == '__main__':
     run_app()

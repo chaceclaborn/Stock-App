@@ -1,12 +1,10 @@
 // stock-api.js - API Communication Module
 const StockAPI = {
-    // Base configuration
     config: {
         baseURL: '/api',
         timeout: 30000
     },
 
-    // Generic API call handler
     async call(endpoint, options = {}) {
         try {
             const response = await axios.get(`${this.config.baseURL}${endpoint}`, options);
@@ -24,7 +22,6 @@ const StockAPI = {
         }
     },
 
-    // Stock endpoints
     async getStocks(category = 'all', forceRefresh = false) {
         return this.call(`/stocks?category=${category}&force=${forceRefresh}`);
     },
@@ -45,17 +42,14 @@ const StockAPI = {
         return this.call(`/search?q=${encodeURIComponent(query)}`);
     },
 
-    // Market endpoints
     async getMarketOverview() {
         return this.call('/market-overview');
     },
 
-    // Predictions endpoints
     async getPredictions() {
         return this.call('/predictions');
     },
 
-    // Debug endpoints
     async getDebugInfo() {
         return this.call('/debug');
     },
