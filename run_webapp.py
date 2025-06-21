@@ -5,6 +5,9 @@ import argparse
 import webbrowser
 import subprocess
 import time
+import warnings
+
+#%%
 
 def check_requirements():
     """Check if required packages are installed"""
@@ -32,6 +35,7 @@ def check_requirements():
 
 def setup_directories():
     """Create necessary directories"""
+
     directories = [
         'src',
         'src/data',
@@ -63,20 +67,6 @@ def setup_directories():
             with open(init_file, 'w') as f:
                 f.write('# Package initialization\n')
 
-def main():
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description="Run Chace's Stock App")
-    parser.add_argument("--port", type=int, default=5000, help="Port to run the web server on")
-    parser.add_argument("--debug", action="store_true", help="Run in debug mode")
-    parser.add_argument("--no-browser", action="store_true", help="Don't open browser automatically")
-    args = parser.parse_args()
-    
-    # Check and install requirements
-    check_requirements()
-    
-    # Setup directories
-    setup_directories()
-    
     # Check file structure
     expected_files = [
         'src/data/fetcher.py', 
@@ -100,6 +90,27 @@ def main():
         print("\nPlease ensure all required files are in place.")
         print("\nIf you're missing analysis files, basic versions have been created.")
         return
+
+#%% Main
+def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Run Chace's Stock App")
+    parser.add_argument("--port", type=int, default=5000, help="Port to run the web server on")
+    parser.add_argument("--debug", action="store_true", help="Run in debug mode")
+    parser.add_argument("--no-browser", action="store_true", help="Don't open browser automatically")
+    args = parser.parse_args()
+    
+    # Verify Working directory: Should be Stock-App Folder. If not print a warning and continue
+    if __file__.split('\\')[-2] != 'Stock-App':
+        warnings.warn('Files not in a recognizeable file structure.')
+    else:
+        os.chdir(os.path.split(__file__)[0])
+
+    # Check and install requirements
+    check_requirements()
+    
+    # Setup directories
+    setup_directories()
     
     print("\n" + "="*60)
     print("🚀 CHACE'S STOCK APP 🚀".center(60))
