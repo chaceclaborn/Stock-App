@@ -1,4 +1,7 @@
 # run_webapp.py
+"""
+Enhanced startup script for the Stock Analyzer Web Application
+"""
 import os
 import sys
 import argparse
@@ -8,19 +11,27 @@ import time
 import warnings
 import signal
 import atexit
-
-#%%
+import threading
 
 def check_requirements():
     """Check if required packages are installed"""
-    required_packages = ['flask', 'yfinance', 'pandas', 'numpy', 'requests', 'textblob','scipy']
+    required_packages = {
+        'flask': 'flask',
+        'yfinance': 'yfinance',
+        'pandas': 'pandas',
+        'numpy': 'numpy',
+        'requests': 'requests',
+        'textblob': 'textblob',
+        'scipy': 'scipy'
+    }
+    
     missing_packages = []
     
-    for package in required_packages:
+    for package_name, import_name in required_packages.items():
         try:
-            __import__(package)
+            __import__(import_name)
         except ImportError:
-            missing_packages.append(package)
+            missing_packages.append(package_name)
     
     if missing_packages:
         print("\n⚠️  Missing required packages:")
@@ -31,13 +42,20 @@ def check_requirements():
         # Install missing packages
         for package in missing_packages:
             print(f"Installing {package}...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+            try:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+                print(f"✓ {package} installed successfully")
+            except subprocess.CalledProcessError as e:
+                print(f"✗ Failed to install {package}: {e}")
+                return False
         
         print("\n✅ All packages installed successfully!\n")
+    
+    return True
 
 def setup_directories():
-    """Create necessary directories"""
-
+    """Create necessary directories and files"""
+    # Create directories
     directories = [
         'src',
         'src/data',
@@ -47,6 +65,9 @@ def setup_directories():
         'src/web/services',
         'src/web/routes',
         'src/web/utils',
+        'src/web/static',
+        'src/web/static/js',
+        'src/web/static/js/modules',
         'src/models',
         'src/analysis',
         'data'
@@ -61,180 +82,167 @@ def setup_directories():
         'src/data/__init__.py',
         'src/web/__init__.py',
         'src/models/__init__.py',
-        'src/analysis/__init__.py'
+        'src/analysis/__init__.py',
+        'src/web/services/__init__.py',
+        'src/web/routes/__init__.py',
+        'src/web/utils/__init__.py'
     ]
     
     for init_file in init_files:
         if not os.path.exists(init_file):
             with open(init_file, 'w') as f:
                 f.write('# Package initialization\n')
+    
+    return True
 
-    # Check file structure
-    expected_files = [
-        'src/data/fetcher.py', 
-        'src/data/database.py',
-        'src/models/predictor.py',
-        'src/web/app.py', 
-        'src/web/templates/index.html',
-        'src/analysis/indicators.py',
-        'src/analysis/pattern_recognition.py'
-    ]
+def check_file_structure():
+    """Check if all required files are present"""
+    required_files = {
+        'src/data/fetcher.py': 'Data fetcher',
+        'src/data/database.py': 'Database module',
+        'src/models/predictor.py': 'Prediction model',
+        'src/web/app.py': 'Flask application',
+        'src/web/templates/index.html': 'Main template',
+        'src/analysis/indicators.py': 'Technical indicators',
+        'src/analysis/pattern_recognition.py': 'Pattern recognition'
+    }
     
     missing_files = []
-    for file in expected_files:
-        if not os.path.exists(file):
-            missing_files.append(file)
+    for file_path, description in required_files.items():
+        if not os.path.exists(file_path):
+            missing_files.append((file_path, description))
     
     if missing_files:
-        print("\n❌ ERROR: Missing required files:")
-        for file in missing_files:
-            print(f"  - {file}")
-        print("\nPlease ensure all required files are in place.")
-        print("\nIf you're missing analysis files, basic versions have been created.")
-        return
-
-def preload_cache(app):
-    """Preload cache with initial data"""
-    print("\n📊 Preloading market data cache...")
-    print("⏳ This may take a minute on first run...")
+        print("\n❌ Missing required files:")
+        for file_path, description in missing_files:
+            print(f"  - {file_path} ({description})")
+        
+        print("\n⚠️  Please ensure all required files are in place.")
+        print("Some features may not work without these files.\n")
+        return False
     
-    with app.app_context():
+    return True
+
+def test_yahoo_finance():
+    """Test if Yahoo Finance is accessible"""
+    print("Testing Yahoo Finance connection...", end=' ')
+    try:
+        import yfinance as yf
+        ticker = yf.Ticker("AAPL")
+        _ = ticker.fast_info
+        print("✓ Connected")
+        return True
+    except Exception as e:
+        print(f"✗ Failed: {e}")
+        print("\n⚠️  Yahoo Finance connection failed.")
+        print("The app will still start but may have limited functionality.")
+        return False
+
+def preload_cache(port):
+    """Preload cache by making initial API calls"""
+    def _preload():
+        time.sleep(3)  # Wait for server to start
         try:
-            from src.web.services import get_service
-            
-            # Get stock service
-            stock_service = get_service('stock')
-            if stock_service:
-                # Load initial cache from database
-                cached_data = stock_service.get_cached_stocks(limit=50)
-                if cached_data['stocks']:
-                    print(f"✅ Loaded {len(cached_data['stocks'])} stocks from database cache")
-                else:
-                    print("📥 No cached data found. Will fetch fresh data on first request.")
-                    print("💡 Tip: The app will gradually build up its cache over time.")
-            
-        except Exception as e:
-            print(f"⚠️  Could not preload cache: {e}")
-            print("   The app will fetch data on first request.")
+            import requests
+            # Try to load cached stocks
+            response = requests.get(f'http://localhost:{port}/api/stocks/cached', timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('data'):
+                    print(f"📊 Pre-loaded {len(data['data'])} stocks from cache")
+        except:
+            pass  # Ignore errors during preload
+    
+    threading.Thread(target=_preload, daemon=True).start()
 
-def cleanup_handler(signum=None, frame=None):
-    """Cleanup handler for graceful shutdown"""
-    print("\n\n👋 Shutting down Chace's Stock App...")
-    print("💾 Saving cache data...")
-    print("Thanks for using the app!")
-    sys.exit(0)
-
-#%% Main
 def main():
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description="Run Chace's Stock App")
-    parser.add_argument("--port", type=int, default=5000, help="Port to run the web server on")
-    parser.add_argument("--debug", action="store_true", help="Run in debug mode")
-    parser.add_argument("--no-browser", action="store_true", help="Don't open browser automatically")
-    parser.add_argument("--no-cache", action="store_true", help="Start without preloading cache")
-    parser.add_argument("--refresh-interval", type=int, default=60, 
-                       help="Cache refresh interval in seconds (default: 60)")
-    parser.add_argument("--max-stocks", type=int, default=50, 
-                       help="Maximum number of stocks to track (default: 50)")
+    """Main entry point"""
+    parser = argparse.ArgumentParser(description='Run the Stock Analyzer Web Application')
+    parser.add_argument('--port', type=int, default=5000, help='Port to run the server on')
+    parser.add_argument('--debug', action='store_true', help='Run in debug mode')
+    parser.add_argument('--no-browser', action='store_true', help='Don\'t open browser automatically')
+    parser.add_argument('--host', default='127.0.0.1', help='Host to bind to')
+    
     args = parser.parse_args()
     
-    # Setup signal handlers for graceful shutdown
-    signal.signal(signal.SIGINT, cleanup_handler)
-    signal.signal(signal.SIGTERM, cleanup_handler)
-    atexit.register(cleanup_handler)
-    
-    # Verify Working directory: Should be Stock-App Folder. If not print a warning and continue
-    if __file__.split('\\')[-2] != 'Stock-App' and __file__.split('/')[-2] != 'Stock-App':
-        warnings.warn('Files not in a recognizable file structure.')
-    else:
-        os.chdir(os.path.split(__file__)[0])
-
-    # Check and install requirements
-    check_requirements()
-    
-    # Setup directories
-    setup_directories()
+    # Suppress warnings
+    warnings.filterwarnings('ignore')
     
     print("\n" + "="*60)
-    print("🚀 CHACE'S STOCK APP 🚀".center(60))
+    print("🚀 STOCK MARKET ANALYZER - STARTUP")
     print("="*60)
-    print("\n✨ Features:")
-    print("   📈 Real-time stock data with smart caching")
-    print("   🤖 AI-powered technical analysis")
-    print("   📊 Advanced trading indicators")
-    print("   🎯 Smart entry/exit recommendations")
-    print("   📱 Real-time news and events")
-    print("   💚 Clean black, green & white theme")
-    print("   🔮 Market sentiment analysis")
-    print("   📉 Enhanced individual stock pages")
-    print("   📊 Performance tracking & analytics")
-    print("   ⚡ Optimized for Yahoo Finance rate limits")
-    print("\n" + "="*60 + "\n")
     
-    # Import only after checks pass
+    # Step 1: Check requirements
+    print("\n1️⃣ Checking requirements...")
+    if not check_requirements():
+        print("\n❌ Failed to install required packages")
+        return 1
+    
+    # Step 2: Setup directories
+    print("\n2️⃣ Setting up directories...")
+    if not setup_directories():
+        print("\n❌ Failed to setup directories")
+        return 1
+    print("✓ Directories ready")
+    
+    # Step 3: Check file structure
+    print("\n3️⃣ Checking file structure...")
+    file_check = check_file_structure()
+    
+    # Step 4: Test Yahoo Finance
+    print("\n4️⃣ Testing external connections...")
+    yf_test = test_yahoo_finance()
+    
+    # Step 5: Import and run the app
+    print("\n5️⃣ Starting the application...")
+    
+    # Add parent directory to path
+    parent_dir = os.path.dirname(os.path.abspath(__file__))
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+    
     try:
-        # Add the current directory to Python path
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        if current_dir not in sys.path:
-            sys.path.insert(0, current_dir)
+        from src.web.app import run_app
         
-        # Set environment variables for configuration
-        os.environ['CACHE_REFRESH_INTERVAL'] = str(args.refresh_interval)
-        os.environ['MAX_TRACKED_STOCKS'] = str(args.max_stocks)
+        # Open browser after a delay
+        if not args.no_browser:
+            def open_browser():
+                time.sleep(2)
+                webbrowser.open(f'http://localhost:{args.port}')
+            
+            threading.Thread(target=open_browser, daemon=True).start()
         
-        # Import the create_app function
-        from src.web.app import create_app
+        # Preload cache
+        preload_cache(args.port)
         
-        # Create the app instance
-        app = create_app('development' if args.debug else 'production')
-        
-        # Preload cache unless disabled
-        if not args.no_cache:
-            preload_cache(app)
-        
-        print(f"\n🌐 Starting server on port {args.port}...")
-        print(f"📊 Cache refresh interval: {args.refresh_interval} seconds")
-        print(f"📈 Tracking up to {args.max_stocks} stocks")
-        print(f"\n🌍 Open your browser and navigate to: http://localhost:{args.port}")
-        print(f"\n📡 Debug endpoint available at: http://localhost:{args.port}/api/debug")
-        print(f"🧪 Test stock endpoint: http://localhost:{args.port}/api/test-stock/AAPL")
-        print("\n💡 Tips:")
-        print("   - Data is cached to minimize API calls")
-        print("   - Cache refreshes automatically based on market hours")
-        print("   - Use the refresh button sparingly to avoid rate limits")
+        # Print final instructions
+        print("\n" + "="*60)
+        print("📊 STOCK ANALYZER READY!")
+        print("="*60)
+        print(f"🌐 Open your browser and navigate to: http://localhost:{args.port}")
+        print(f"📡 Debug endpoint: http://localhost:{args.port}/api/debug")
+        print(f"🧪 Test stock: http://localhost:{args.port}/api/test-stock/AAPL")
+        print("="*60)
+        print("\n💡 First-time tips:")
+        print("   - Initial data load may take 10-30 seconds")
+        print("   - Check /api/debug if stocks don't appear")
+        print("   - Data is cached to reduce API calls")
+        print("   - Refresh button updates all data")
         print("\nPress Ctrl+C to stop the server\n")
         
-        # Automatically open browser unless --no-browser flag is used
-        if not args.no_browser:
-            # Wait a moment for server to start
-            import threading
-            def open_browser():
-                time.sleep(1.5)
-                webbrowser.open(f"http://localhost:{args.port}")
-            
-            browser_thread = threading.Thread(target=open_browser)
-            browser_thread.daemon = True
-            browser_thread.start()
-        
-        # Run the app with optimized settings
-        app.run(
-            debug=args.debug, 
-            port=args.port, 
-            threaded=True,
-            use_reloader=False  # Disable reloader to prevent duplicate processes
-        )
+        # Run the app
+        run_app(debug=args.debug, port=args.port)
         
     except ImportError as e:
-        print(f"\n❌ Error importing required modules: {e}")
-        print("\nTry running:")
-        print(f"  export PYTHONPATH={current_dir}:$PYTHONPATH")
-        print(f"  python {__file__}")
+        print(f"\n❌ Failed to import application: {e}")
+        print("Please ensure all files are properly set up.")
+        return 1
     except KeyboardInterrupt:
-        cleanup_handler()
+        print("\n\n✋ Server stopped by user")
+        return 0
     except Exception as e:
-        print(f"\n❌ Error starting application: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"\n❌ Unexpected error: {e}")
+        return 1
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    sys.exit(main())

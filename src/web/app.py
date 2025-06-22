@@ -1,82 +1,45 @@
 # src/web/app.py
 """
-Main Flask application setup - Refactored for modularity
+Flask application with minimal fixes for compatibility
 """
 import os
 import sys
 import logging
-from flask import Flask, render_template, jsonify, send_from_directory
-from flask.json.provider import DefaultJSONProvider
-import numpy as np
-import pandas as pd
-
-# Add parent directory to path so we can import our modules
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if parent_dir not in sys.path:
-    sys.path.append(parent_dir)
+from flask import Flask, render_template, jsonify
+from datetime import datetime
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class CustomJSONProvider(DefaultJSONProvider):
-    """Custom JSON provider to handle numpy types"""
-    def default(self, obj):
-        if isinstance(obj, (np.integer, np.int64)):
-            return int(obj)
-        elif isinstance(obj, (np.floating, np.float64)):
-            return float(obj)
-        elif isinstance(obj, np.ndarray):
-            return obj.tolist()
-        elif pd.isna(obj):
-            return None
-        return super().default(obj)
-
-def create_app(config_name='development'):
-    """Application factory pattern"""
+def create_app(config_name='production'):
+    """Create and configure Flask application"""
     
-    # Get the directory where this file is located
-    base_dir = os.path.dirname(os.path.abspath(__file__))
+    # Fix import paths
+    parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if parent_dir not in sys.path:
+        sys.path.append(parent_dir)
     
-    # Create Flask app with proper paths
+    # Create Flask app
     app = Flask(__name__,
-                template_folder=os.path.join(base_dir, 'templates'),
-                static_folder=os.path.join(base_dir, 'static'),
+                template_folder='templates',
+                static_folder='static',
                 static_url_path='/static')
     
-    # Set custom JSON provider
-    app.json = CustomJSONProvider(app)
-    
-    # Load configuration
-    if config_name == 'production':
-        app.config['DEBUG'] = False
-    else:
-        app.config['DEBUG'] = True
-    
-    # Additional configuration
+    # Configure app
+    app.config['SECRET_KEY'] = 'dev-secret-key-change-in-production'
     app.config['JSON_SORT_KEYS'] = False
-    app.config['JSONIFY_PRETTYPRINT_REGULAR'] = True
     
-    # Ensure template directories exist
-    partials_dir = os.path.join(app.template_folder, 'partials')
-    os.makedirs(partials_dir, exist_ok=True)
+    # Initialize extensions
+    app.extensions = {}
     
-    # Ensure static directories exist
-    static_js_dir = os.path.join(app.static_folder, 'js')
-    static_modules_dir = os.path.join(static_js_dir, 'modules')
-    os.makedirs(static_modules_dir, exist_ok=True)
-    
-    # Initialize services (moved to separate initialization file)
+    # Initialize services
     try:
         from .services import init_services
         services = init_services(app)
         logger.info(f"Initialized {len(services)} services")
     except Exception as e:
-        logger.error(f"Failed to initialize services: {str(e)}", exc_info=True)
-        # Continue anyway to allow debugging
+        logger.error(f"Service initialization error: {e}")
     
     # Register blueprints
     try:
@@ -85,92 +48,27 @@ def create_app(config_name='development'):
             app.register_blueprint(blueprint)
             logger.info(f"Registered blueprint: {blueprint.name}")
     except Exception as e:
-        logger.error(f"Failed to register blueprints: {str(e)}", exc_info=True)
+        logger.error(f"Blueprint registration error: {e}")
     
-    # Register main routes
+    # Root route
     @app.route('/')
     def index():
-        """Render the main page"""
+        """Render the main application page"""
         return render_template('index.html')
-    
-    # Static file serving route (explicit)
-    @app.route('/static/<path:path>')
-    def send_static(path):
-        """Serve static files"""
-        return send_from_directory(app.static_folder, path)
     
     # Debug endpoint
     @app.route('/api/debug')
     def debug_info():
         """Debug endpoint to check system status"""
-        debug_data = {
-            'status': 'running',
-            'python_version': sys.version,
-            'working_directory': os.getcwd(),
-            'parent_directory': parent_dir,
-            'sys_path': sys.path,
-            'services_initialized': False,
-            'services_count': 0,
-            'services_available': [],
-            'errors': [],
-            'static_folder': app.static_folder,
-            'template_folder': app.template_folder
-        }
-        
-        try:
-            # Check if services are initialized
-            if hasattr(app, 'extensions') and 'services' in app.extensions:
-                services = app.extensions['services']
-                debug_data['services_initialized'] = True
-                debug_data['services_count'] = len(services)
-                debug_data['services_available'] = list(services.keys())
-                
-                # Test stock service
-                if 'stock' in services:
-                    stock_service = services['stock']
-                    debug_data['stock_service'] = {
-                        'initialized': True,
-                        'has_db': stock_service._db is not None,
-                        'has_fetcher': stock_service._fetcher is not None
-                    }
-                    
-                    # Try to get categories
-                    try:
-                        categories = stock_service.get_categories()
-                        debug_data['stock_categories'] = categories
-                    except Exception as e:
-                        debug_data['errors'].append(f"Error getting categories: {str(e)}")
-                    
-                    # Try to get cached stocks
-                    try:
-                        cached = stock_service.get_cached_stocks()
-                        debug_data['cached_stocks_count'] = len(cached.get('stocks', []))
-                    except Exception as e:
-                        debug_data['errors'].append(f"Error getting cached stocks: {str(e)}")
-                        
-        except Exception as e:
-            debug_data['errors'].append(f"Error checking services: {str(e)}")
-        
-        # Check for required modules
-        required_modules = [
-            'yfinance',
-            'pandas',
-            'numpy',
-            'textblob',
-            'flask'
-        ]
-        
-        debug_data['modules'] = {}
-        for module in required_modules:
-            try:
-                __import__(module)
-                debug_data['modules'][module] = 'installed'
-            except ImportError:
-                debug_data['modules'][module] = 'missing'
-        
-        return jsonify(debug_data)
+        services = app.extensions.get('services', {})
+        return jsonify({
+            'status': 'operational',
+            'timestamp': datetime.now().isoformat(),
+            'services': list(services.keys()),
+            'service_count': len(services)
+        })
     
-    # Test endpoint for stock data
+    # Test endpoint
     @app.route('/api/test-stock/<symbol>')
     def test_stock(symbol):
         """Test endpoint to check if we can fetch a single stock"""
@@ -183,8 +81,7 @@ def create_app(config_name='development'):
                 'success': True,
                 'symbol': symbol.upper(),
                 'name': info.get('longName', 'Unknown'),
-                'price': info.get('regularMarketPrice', info.get('currentPrice', 0)),
-                'info_keys': list(info.keys())[:20]  # First 20 keys
+                'price': info.get('regularMarketPrice', info.get('currentPrice', 0))
             })
         except Exception as e:
             return jsonify({

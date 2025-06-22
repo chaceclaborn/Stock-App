@@ -1,120 +1,111 @@
 # src/web/utils/api_response.py
 """
-Standardized API response utilities
+API response utilities for consistent response formatting
 """
-from datetime import datetime
 from flask import jsonify
+from datetime import datetime
 import numpy as np
-import pandas as pd
 
 class APIResponse:
-    """Standardized API response format"""
+    """Standardized API response builder"""
     
     @staticmethod
     def success(data=None, message=None, **kwargs):
-        """Return a success response"""
+        """Create a success response"""
         response = {
-            'status': 'success',
-            'data': APIResponse.convert_numpy_types(data) if data is not None else None,
+            'success': True,
             'timestamp': datetime.now().isoformat()
         }
+        
+        if data is not None:
+            response['data'] = data
         
         if message:
             response['message'] = message
-            
-        # Add any additional fields
-        for key, value in kwargs.items():
-            response[key] = APIResponse.convert_numpy_types(value)
         
-        return jsonify(response)
+        # Add any additional fields
+        response.update(kwargs)
+        
+        return jsonify(response), 200
     
     @staticmethod
-    def error(message, code=400, details=None):
-        """Return an error response"""
+    def error(message, status_code=400, error_code=None, **kwargs):
+        """Create an error response"""
         response = {
-            'status': 'error',
+            'success': False,
             'error': message,
-            'code': code,
             'timestamp': datetime.now().isoformat()
         }
         
-        if details:
-            response['details'] = details
-            
-        return jsonify(response), code
+        if error_code:
+            response['error_code'] = error_code
+        
+        # Add any additional fields
+        response.update(kwargs)
+        
+        return jsonify(response), status_code
     
     @staticmethod
-    def no_data(message="No data available"):
-        """Return a no data response"""
-        return jsonify({
-            'status': 'no_data',
-            'message': message,
+    def no_data(message="No data available", **kwargs):
+        """Create a no data response"""
+        response = {
+            'success': True,
             'data': [],
+            'message': message,
             'timestamp': datetime.now().isoformat()
-        })
+        }
+        
+        response.update(kwargs)
+        
+        return jsonify(response), 200
     
     @staticmethod
-    def cached(data, last_updated, message="Using cached data"):
-        """Return a response indicating cached data"""
-        return jsonify({
-            'status': 'cached',
-            'data': APIResponse.convert_numpy_types(data) if data is not None else None,
-            'message': message,
-            'last_updated': last_updated,
+    def cached(data, last_updated=None, **kwargs):
+        """Create a cached data response"""
+        response = {
+            'success': True,
+            'data': data,
             'from_cache': True,
             'timestamp': datetime.now().isoformat()
-        })
+        }
+        
+        if last_updated:
+            response['cache_timestamp'] = last_updated
+        
+        response.update(kwargs)
+        
+        return jsonify(response), 200
+    
+    @staticmethod
+    def paginated(data, page, per_page, total, **kwargs):
+        """Create a paginated response"""
+        response = {
+            'success': True,
+            'data': data,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total,
+                'pages': (total + per_page - 1) // per_page if per_page > 0 else 0
+            },
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        response.update(kwargs)
+        
+        return jsonify(response), 200
     
     @staticmethod
     def convert_numpy_types(obj):
-        """Convert numpy types to Python native types for JSON serialization"""
-        # Handle None
-        if obj is None:
-            return None
-            
-        # Handle numpy integers
-        if isinstance(obj, (np.integer, np.int64)):
+        """Convert numpy types to native Python types for JSON serialization"""
+        if isinstance(obj, np.integer):
             return int(obj)
-            
-        # Handle numpy floats
-        elif isinstance(obj, (np.floating, np.float64)):
+        elif isinstance(obj, np.floating):
             return float(obj)
-            
-        # Handle numpy arrays
         elif isinstance(obj, np.ndarray):
             return obj.tolist()
-            
-        # Handle pandas Series
-        elif isinstance(obj, pd.Series):
-            return obj.tolist()
-            
-        # Handle single value NaN check
-        elif isinstance(obj, (int, float, str, bool)):
-            try:
-                if pd.isna(obj):
-                    return None
-            except:
-                pass
-            return obj
-            
-        # Handle dictionaries recursively
         elif isinstance(obj, dict):
-            return {k: APIResponse.convert_numpy_types(v) for k, v in obj.items()}
-            
-        # Handle lists recursively
+            return {key: APIResponse.convert_numpy_types(value) for key, value in obj.items()}
         elif isinstance(obj, list):
-            return [APIResponse.convert_numpy_types(i) for i in obj]
-            
-        # Handle tuples
-        elif isinstance(obj, tuple):
-            return tuple(APIResponse.convert_numpy_types(i) for i in obj)
-            
-        # For any other type, try to convert or return as is
-        else:
-            # Check if it's array-like but not string
-            if hasattr(obj, '__len__') and not isinstance(obj, str):
-                try:
-                    return [APIResponse.convert_numpy_types(i) for i in obj]
-                except:
-                    return str(obj)
-            return obj
+            return [APIResponse.convert_numpy_types(item) for item in obj]
+        return obj
